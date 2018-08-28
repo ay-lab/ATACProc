@@ -156,7 +156,7 @@ Mandatory parameters:
 	-D  DEBUG_TXT		 
 				Binary variable. If 1 (recommended), different statistics corresponding to 
 				quality metrics and reads are printed. Useful when a summary of a large set 
-				of ChIP-seq samples are to be generated.
+				of ATAC-seq samples are to be generated.
 		
 	-q  MAPQ_THR		 
 				Quality value threshold, below which the mapped reads are removed (Default 30).
@@ -346,13 +346,13 @@ To get a summarized list of performance metrics for these samples, use the scrip
 
 Sample execution command:
 
-Rscript ResSummary.r /home/sourya/ChIPResults/ OutSummary.xls
+Rscript ResSummary.r /home/sourya/ATACResults/ OutSummary.xls
 
 
 Command for executing IDR codes
 ---------------------------------
 
-Current pipeline supports IDR analysis between either a list of ChIP-seq peak files 
+Current pipeline supports IDR analysis between either a list of ATAC-seq peak files 
 or between a list of alignment (BAM) files. In the second case, first the BAM files 
 are analyzed and subsampled to contain equal number of reads (minimum number of reads 
 contained in the inputs), and subsequently, peaks are estimated from these 
@@ -382,7 +382,7 @@ shows calling following two functions (both are included within the folder
 			Output directory (absolute path preferred) which will store the IDR results.
 
 	-n 	PREFIX 			 
-			Prefix of output files. Default 'IDR_ChIP'.
+			Prefix of output files. Default 'IDR_ATAC'.
 
 	A sample execution of this script is as follows:
 
@@ -405,18 +405,12 @@ shows calling following two functions (both are included within the folder
 			Output directory (absolute path preferred) which will store the IDR results.
 
 	-n 	PREFIX 			 
-			Prefix of output files. Default 'IDR_ChIP'.
+			Prefix of output files. Default 'IDR_ATAC'.
 
 	-c  CountPeak		 
 			No of peaks in both replicates that will be compared for IDR analysis.
 			Default 25000.
-	
-	-T 	Tagmentation	 
-			Binary variable. If 1, the input is a ChiPMentation data 
-			where the TAG Align files are created by 
-			shifting the strands a bit. Default 0. 
-			Tag align files are used for estimating peaks using MACS2.
-	
+		
 	-C  CONTROLBAM		 
 			Control file (in eiher .BAM or tagalign file in .gz format)	
 			used to estimate the peaks from MACS2. User may leave this field 
