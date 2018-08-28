@@ -418,7 +418,7 @@ shows calling following two functions (both are included within the folder
 
 	A sample execution of this script is as follows:
 
-	./IDR_SubSampleBAM_Main.sh -I inpfile1.bam -I inpfile2.bam -P /home/sourya/packages/idrCode/ -d /home/sourya/OutDir_IDR -n 'IDR_test' -c 25000 -T 1 -C control.bam
+	./IDR_SubSampleBAM_Main.sh -I inpfile1.bam -I inpfile2.bam -P /home/sourya/packages/idrCode/ -d /home/sourya/OutDir_IDR -n 'IDR_test' -c 25000 -C control.bam
 
 
 Describing output of IDR analysis
