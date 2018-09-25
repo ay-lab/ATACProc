@@ -75,6 +75,8 @@ for example, is provided in this link: http://hgdownload.soe.ucsc.edu/admin/exe/
 9) The R package ATACseqQC (https://bioconductor.org/packages/release/bioc/html/ATACseqQC.html) 
 and its associated dependencies.
 
+10) Python version 2.7, along with the package levenshtein (pip install python-levenshtein)
+
 User should include the PATH of above mentioned libraries / packages inside their SYSTEM PATH variable. 
 Some of these PATHS are also to be mentioned in a separate configuration file (mentioned below).
 
