@@ -137,7 +137,10 @@ Overwrite=0
 # reference packages / executables
 #============================
 # R package installed - executable
-RPackageExec='Rscript'
+RPackageExec='which Rscript'
+
+# python executable
+PythonExec=`which python`
 
 # picard_exec='/share/apps/picard-tools/picard-tools-2.7.1/picard.jar'
 
@@ -503,7 +506,7 @@ if [ $fastq_input == 1 ]; then
 			# call the adapter trimming function
 			# specify input fastq files
 			# also mention the output directory to store these files
-			python ../src/trim_adapters.py -a $FASTQ1 -b $FASTQ2 -d $trim_adapter_dir
+			$PythonExec ../src/trim_adapters.py -a $FASTQ1 -b $FASTQ2 -d $trim_adapter_dir
 
 			# comment - sourya
 			# trim_file1=$file1'.trim.fastq'
@@ -731,7 +734,7 @@ if [ $paired_read == 1 ]; then
 		java -Xmx$MAX_MEM -jar $picard_exec CollectInsertSizeMetrics I=$bowtie2_BAM_prefix'.rmdup.bam' O=$picard_insert_metricfile H=$picard_insert_histfile M=0.5
 		# plotting the ATAC seq representative plot
 		# normalized read count vs bp distance
-		python ../src/PlotSample.py -I $picard_insert_metricfile
+		$PythonExec ../src/PlotSample.py -I $picard_insert_metricfile
 	fi
 fi
 
