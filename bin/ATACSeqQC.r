@@ -17,23 +17,137 @@
 # running command line arguments:
 # 1) input bam file name
 # 2) output directory where the results would be stored
-# 3) reference genome name - such as 'hg19' (default), 'mm9', 'mm10', etc.
+# 3) boolean flag whether paired end (1) or single end (0) read is input
+# 4) reference genome name - such as 'hg19' (default), 'mm9', 'mm10', etc.
 
 #==================================
 # author: Sourya Bhattacharyya
 # Vijay-AY lab
 #==================================
 
-suppressPackageStartupMessages({
-  library(ATACseqQC)
-  library(ChIPpeakAnno)
-  library(BSgenome.Hsapiens.UCSC.hg19)
-  library(TxDb.Hsapiens.UCSC.hg19.knownGene)
-  library(phastCons100way.UCSC.hg19)
-  library(MotifDb)
-  library(GenomicRanges)
-  library(GenomicAlignments)
-})
+#============
+# install package
+
+# suppressPackageStartupMessages({
+#   library(ATACseqQC)
+#   library(ChIPpeakAnno)
+#   library(BSgenome.Hsapiens.UCSC.hg19)
+#   library(BSgenome.Hsapiens.UCSC.hg38)
+#   library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+#   library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+#   library(phastCons100way.UCSC.hg19)
+#   library(phastCons100way.UCSC.hg38)
+#   library(MotifDb)
+#   library(GenomicRanges)
+#   library(GenomicAlignments)
+# })
+
+if(!require(GenomicAlignments)){
+	library(BiocInstaller)
+    biocLite(c("GenomicAlignments"))
+}
+library(GenomicAlignments)
+
+if(!require(GenomicRanges)){
+	library(BiocInstaller)
+    biocLite(c("GenomicRanges"))
+}
+library(GenomicRanges)
+
+if(!require(MotifDb)){
+	library(BiocInstaller)
+    biocLite(c("MotifDb"))
+}
+library(MotifDb)
+
+if(!require(ChIPpeakAnno)){
+	library(BiocInstaller)
+    biocLite(c("ChIPpeakAnno"))
+}
+library(ChIPpeakAnno)
+
+if(!require(ATACseqQC)){
+	library(BiocInstaller)
+    biocLite(c("ATACseqQC"))    
+}
+library(ATACseqQC)
+
+if(!require(BSgenome.Hsapiens.UCSC.hg19)){
+	library(BiocInstaller)
+    biocLite(c("BSgenome.Hsapiens.UCSC.hg19"))
+}
+library(BSgenome.Hsapiens.UCSC.hg19)
+
+if(!require(TxDb.Hsapiens.UCSC.hg19.knownGene)){
+	library(BiocInstaller)
+    biocLite(c("TxDb.Hsapiens.UCSC.hg19.knownGene"))
+}
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+
+if(!require(phastCons100way.UCSC.hg19)){
+	library(BiocInstaller)
+    biocLite(c("phastCons100way.UCSC.hg19"))
+}
+library(phastCons100way.UCSC.hg19)
+
+if(!require(BSgenome.Hsapiens.UCSC.hg38)){
+	library(BiocInstaller)
+    biocLite(c("BSgenome.Hsapiens.UCSC.hg38"))
+}
+library(BSgenome.Hsapiens.UCSC.hg38)
+
+if(!require(TxDb.Hsapiens.UCSC.hg38.knownGene)){
+	library(BiocInstaller)
+    biocLite(c("TxDb.Hsapiens.UCSC.hg38.knownGene"))
+}
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+
+if(!require(phastCons100way.UCSC.hg38)){
+	library(BiocInstaller)
+    biocLite(c("phastCons100way.UCSC.hg38"))
+}
+library(phastCons100way.UCSC.hg38)
+
+
+# if(!require(BSgenome.Mmusculus.UCSC.mm9)){
+# 	library(BiocInstaller)
+#     biocLite(c("BSgenome.Mmusculus.UCSC.mm9"))
+#     library(BSgenome.Mmusculus.UCSC.mm9)
+# }
+
+# if(!require(TxDb.Mmusculus.UCSC.mm9.knownGene)){
+# 	library(BiocInstaller)
+#     biocLite(c("TxDb.Mmusculus.UCSC.mm9.knownGene"))
+#     library(TxDb.Mmusculus.UCSC.mm9.knownGene)
+# }
+
+# if(!require(phastCons60way.UCSC.mm9)){
+# 	library(BiocInstaller)
+#     biocLite(c("phastCons60way.UCSC.mm9"))
+#     library(phastCons60way.UCSC.mm9)
+# }
+
+# if(!require(BSgenome.Mmusculus.UCSC.mm10)){
+# 	library(BiocInstaller)
+#     biocLite(c("BSgenome.Mmusculus.UCSC.mm10"))
+#     library(BSgenome.Mmusculus.UCSC.mm10)
+# }
+
+# if(!require(TxDb.Mmusculus.UCSC.mm10.knownGene)){
+# 	library(BiocInstaller)
+#     biocLite(c("TxDb.Mmusculus.UCSC.mm10.knownGene"))
+#     library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+# }
+
+# if(!require(phastCons60way.UCSC.mm10)){
+# 	library(BiocInstaller)
+#     biocLite(c("phastCons60way.UCSC.mm10"))
+#     library(phastCons60way.UCSC.mm10)
+# }
+
+# end install package
+#============
+
 knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 
 args <- commandArgs(TRUE)
