@@ -1,0 +1,50 @@
+#==================================== 
+# Configuration file for running the ATAC-seq pipeline
+# Contains locations of executables and a few genome specific files
+# required to execute the pipeline
+#====================================  
+
+
+# Picard tool executable
+# used for removing PCR duplicates from the ChIP-seq alignment file
+picardexec=/home/sourya/packages/PicardTool/picard_version_2.18.14.jar
+
+# HOMER package executable path
+HOMERPath=/home/sourya/packages/HOMER/bin/
+
+# deeptools package - directory
+DeepToolsDir=/home/sourya/packages/deepTools/deepTools2.0/bin/
+
+# file (SQL) required to convert the narrowPeak file to the bigBed format
+# check the UCSC web site to download these files
+NarrowPeakASFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/narrowPeak.as
+
+# file (SQL) required to convert the bignarrowPeak file to the bigBed format
+# check the UCSC web site to download these files
+BigNarrowPeakASFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/bigNarrowPeak.as
+
+# file (SQL) required to convert the broadPeak file to the bigBed format
+# check the UCSC web site to download these files
+BroadPeakASFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/broadPeak.as
+
+# files containing chromosome size information
+# two column file storing the size of individual chromosomes
+# example: for reference genome hg19, chrom_hg19.sizes 
+# example: for reference genome hg38, hg38.chrom.sizes
+# example: for reference genome mm9, chrom_mm9.sizes
+# example: for reference genome mm10, mm10.chrom.sizes
+RefChrSizeFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/hg38.chrom.sizes
+
+# files containing reference chromosome fasta sequence
+# example: hg19.fa, mm9.fa, hg38.fa and mm10.fa
+RefChrFastaFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/Complete_Genome/hg38/hg38.fa
+
+# files containing reference UCSC annotation (.gtf format) corresponding to the reference Chromosome
+# applied as an input to HOMER
+# example: hg19_UCSC_annotation.gtf, hg38_UCSC_Annotation.gtf, mm9_UCSC_annotation.gtf, mm10_UCSC_Annotation.gtf
+RefChrAnnotFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/Annotation/hg38/UCSC/hg38_UCSC_Annotation.gtf
+
+
+
+
+
