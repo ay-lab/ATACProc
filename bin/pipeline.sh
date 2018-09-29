@@ -109,10 +109,11 @@ PEAKCALLGENOMESIZE="hs"
 FASTQ1=""
 FASTQ2=""
 
-# P value used to compute the MACS2 peak
-MACS2_P_Val=1e-3
-
-#MACS2_Q_Val=0.05
+# q-value used to compute the MACS2 peak
+# we use very liberal threshold at first
+# Note: previously we were using p-value as threshold
+# but found that q-values are not reported then
+MACS2_Q_Val=0.1
 
 # Q value thresholds
 # -log10(0.05)
@@ -137,7 +138,7 @@ Overwrite=0
 # reference packages / executables
 #============================
 # R package installed - executable
-RPackageExec='which Rscript'
+RPackageExec=`which Rscript`
 
 # python executable
 PythonExec=`which python`
@@ -273,9 +274,9 @@ do
 			if [ $param == "DeepToolsDir" ]; then
 				DeepToolsDir=$paramval
 			fi		
-			if [ $param == "RPackageExec" ]; then
-				RPackageExec=$paramval
-			fi			
+			# if [ $param == "RPackageExec" ]; then
+			# 	RPackageExec=$paramval
+			# fi
 			if [ $param == "NarrowPeakASFile" ]; then
 				NarrowPeakASFile=$paramval
 			fi			
@@ -318,10 +319,10 @@ if [[ -z $DeepToolsDir ]]; then
 	exit 1
 fi
 
-if [[ -z $RPackageExec ]]; then
-	echo 'R executable is not provided - check the configuration file - quit !! '
-	exit 1
-fi
+# if [[ -z $RPackageExec ]]; then
+# 	echo 'R executable is not provided - check the configuration file - quit !! '
+# 	exit 1
+# fi
 
 if [[ -z $NarrowPeakASFile ]]; then
 	echo 'File to convert narrowPeak to BigBed (NarrowPeakASFile) is not provided - check the configuration file - quit !! '
@@ -381,23 +382,28 @@ if [[ $BOWTIE2_GENOME = *"hg19"* || $BigWigGenome = *"hg19"* ]]; then
 	# RefChrSizeFile=$Refhg19ChrSize
 	# RefChrFastaFile=$hg19_fastafile
 	# RefChrAnnotFile=$hg19_ucsc_annotationfile
+	RefGenome='hg19'
 	EGS=2864785220
 elif [[ $BOWTIE2_GENOME = *"hg38"* || $BigWigGenome = *"hg38"* ]]; then
 	# RefChrSizeFile=$Refhg38ChrSize
 	# RefChrFastaFile=$hg38_fastafile
 	# RefChrAnnotFile=$hg38_ucsc_annotationfile
+	RefGenome='hg38'
 	EGS=2913022398
 elif [[ $BOWTIE2_GENOME = *"mm9"* || $BigWigGenome = *"mm9"* ]]; then
 	# RefChrSizeFile=$Refmm9ChrSize
 	# RefChrFastaFile=$mm9_fastafile
 	# RefChrAnnotFile=$mm9_ucsc_annotationfile
+	RefGenome='mm9'
 	EGS=2620345972
 elif [[ $BOWTIE2_GENOME = *"mm10"* || $BigWigGenome = *"mm10"* ]]; then
 	# RefChrSizeFile=$Refmm10ChrSize
 	# RefChrFastaFile=$mm10_fastafile
 	# RefChrAnnotFile=$mm10_ucsc_annotationfile
+	RefGenome='mm10'
 	EGS=2652783500
 else
+	RefGenome='hg19'	# default
 	EGS=0
 fi
 
@@ -865,8 +871,15 @@ elif [[ $inpfile'.bai' -ot $inpfile ]]; then
 	samtools index $inpfile
 fi
 
-$RPackageExec $script_dir'/ATACSeqQC.r' $inpfile $outdir 0
+# call the ATAC-seq quality control package 
+# with the appropriate settings
+# third argument: paired end read (boolean) flag
+# fourth argument: reference genome information
 
+# currently supports only hg19 or hg38 reference genome
+if [[ $RefGenome == 'hg19' || $RefGenome == 'hg38' ]]; then
+	$RPackageExec $script_dir'/ATACSeqQC.r' $inpfile $outdir $paired_read $RefGenome
+fi
 
 #===============================
 # we also create a tag align formatted bed file of the control sample(s)
@@ -932,11 +945,11 @@ mkdir -p $MACS2_outdir_default
 #**************
 MACS2PeakOutFile=$MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak'
 if [[ ! -f $MACS2PeakOutFile || $Overwrite == 1 ]]; then
-	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2 -p '$MACS2_P_Val' --outdir '$MACS2_outdir_default
+	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2 -q '$MACS2_Q_Val' --outdir '$MACS2_outdir_default
 	
 	# this is an alernate command 
 	# only invoked when the above comamnd fails
-	MACS2_alternate_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2 -p '$MACS2_P_Val' --nomodel --extsize 147 --outdir '$MACS2_outdir_default
+	MACS2_alternate_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2 -q '$MACS2_Q_Val' --nomodel --extsize 147 --outdir '$MACS2_outdir_default
 
 	if [[ $nctrl -gt 0 ]]; then
 		# include the control bed file also
@@ -1052,11 +1065,11 @@ $RPackageExec ../Analysis/PeakAnnotateHomerSummary.r $OutTextFile ${PeakAnnotate
 #**************
 MACS2BroadPeakOutFile=$MACS2_outdir_default$PREFIX'.macs2_Broad_peaks.broadPeak'
 if [[ ! -f $MACS2BroadPeakOutFile || $Overwrite == 1 ]]; then
-	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -p '$MACS2_P_Val' --broad --outdir '$MACS2_outdir_default
+	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --broad --outdir '$MACS2_outdir_default
 	
 	# this is an alernate command 
 	# only invoked when the above comamnd fails
-	MACS2_alternate_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -p '$MACS2_P_Val' --broad --nomodel --extsize 147 --outdir '$MACS2_outdir_default
+	MACS2_alternate_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --broad --nomodel --extsize 147 --outdir '$MACS2_outdir_default
 
 	if [[ $nctrl -gt 0 ]]; then
 		# include the control bed file also
@@ -1142,7 +1155,7 @@ mkdir -p $MACS2_outdir_ext
 #**************
 MACS2PeakOutFile=$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak'
 if [[ ! -f $MACS2PeakOutFile || $Overwrite == 1 ]]; then
-	MACS2_cmd="macs2 callpeak -t "$Shifted_TagAlign_File" -f BED -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -p "$MACS2_P_Val" --nomodel --nolambda --keep-dup all --shift -100 --extsize 200 --outdir "$MACS2_outdir_ext
+	MACS2_cmd="macs2 callpeak -t "$Shifted_TagAlign_File" -f BED -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -q "$MACS2_Q_Val" --nomodel --nolambda --keep-dup all --shift -100 --extsize 200 --outdir "$MACS2_outdir_ext
 	if [[ $nctrl -gt 0 ]]; then
 		# include the control bed file also
 		MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
@@ -1249,7 +1262,7 @@ $RPackageExec ../Analysis/PeakAnnotateHomerSummary.r $OutTextFile ${PeakAnnotate
 #**************
 MACS2BroadPeakOutFile=$MACS2_outdir_ext$PREFIX'.macs2_Broad_peaks.broadPeak'
 if [[ ! -f $MACS2BroadPeakOutFile || $Overwrite == 1 ]]; then
-	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -p '$MACS2_P_Val' --nomodel --nolambda --keep-dup all --broad --shift -100 --extsize 200 --outdir '$MACS2_outdir_ext
+	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --nomodel --nolambda --keep-dup all --broad --shift -100 --extsize 200 --outdir '$MACS2_outdir_ext
 	
 	if [[ $nctrl -gt 0 ]]; then
 		# include the control bed file also
@@ -1343,7 +1356,7 @@ if [[ 0 == 1 ]]; then
 	# first form the command
 	MACS2PeakOutFile=$MACS2_outdir$PREFIX'.macs2_peaks.narrowPeak'
 	if [[ ! -f $MACS2PeakOutFile || $Overwrite == 1 ]]; then
-		MACS2_cmd="macs2 callpeak -t "$bowtie2_BAM_prefix".bam -f BAM -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -p "$MACS2_P_Val" --nomodel --nolambda --keep-dup all --shift -100 --extsize 200 --outdir "$MACS2_outdir
+		MACS2_cmd="macs2 callpeak -t "$bowtie2_BAM_prefix".bam -f BAM -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -q "$MACS2_Q_Val" --nomodel --nolambda --keep-dup all --shift -100 --extsize 200 --outdir "$MACS2_outdir
 		if [[ $nctrl -gt 0 ]]; then
 			# include the control bed file also
 			MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
