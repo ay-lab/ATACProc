@@ -801,7 +801,13 @@ if [ $DEBUG_TXT == 1 ]; then
 	# Number of distinct uniquely mapping reads (after removing duplicates) / total number of reads
 	# other definition is number of distinct genome position for uniquely mapped reads / number of uniquely mapped reads
 	# we follow this second definition (ENCODE PAPER)
-	NRFval=`bc <<< "scale=3; ($uniqgenomepos * 1.0) / $uniq_mapped_read"`
+	# discriminate between single end and paired end reads
+	if [ $paired_read == 1 ]; then
+		# one uniq_mapped_read corresponds to two distinct genome positions
+		NRFval=`bc <<< "scale=3; ($uniqgenomepos * 0.5) / $uniq_mapped_read"`
+	else
+		NRFval=`bc <<< "scale=3; ($uniqgenomepos * 1.0) / $uniq_mapped_read"`
+	fi
 
 	# number of genomic locations where exactly one read maps uniquely
 	M1=`awk '$4==1' $temp_NRF_PBC_file | wc -l`
@@ -1110,11 +1116,22 @@ if [ $DEBUG_TXT == 1 ]; then
 	FRiP_outfile=$MACS2_outdir_default'out_FRiP.txt'
 	if [[ ! -f $FRiP_outfile || $Overwrite == 1 ]]; then
 		# number of reads within MACS2 narrow peaks (q threshold = 0.05)
-		macs2_nreads_narrowpeak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
+		
+		# old code - comment - sourya
+		# -c (count option) returns incorrect numbers for paired end reads
+		# macs2_nreads_narrowpeak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
+		# new code - dump filtered reads first and then count the number of reads
+		macs2_nreads_narrowpeak=`samtools view -L $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
+
 		FRiP_narrowpeak=`bc <<< "scale=3; ($macs2_nreads_narrowpeak * 1.0) / $uniq_mapped_read"`
 
 		# number of reads within MACS2 broad peaks (q threshold = 0.05)
-		macs2_nreads_broadpeak=`samtools view -cL $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam'`
+		# old code - comment - sourya
+		# -c (count option) returns incorrect numbers for paired end reads
+		# macs2_nreads_broadpeak=`samtools view -cL $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam'`
+		# new code - dump filtered reads first and then count the number of reads
+		macs2_nreads_broadpeak=`samtools view -L $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
+		
 		FRiP_broadpeak=`bc <<< "scale=3; ($macs2_nreads_broadpeak * 1.0) / $uniq_mapped_read"`
 
 		echo -e 'UniqMappedRead\tMappedReadNarrowpeak\tFRiPNarrowPeak\tMappedReadBroadpeak\tFRiPBroadPeak' > $FRiP_outfile
@@ -1294,13 +1311,25 @@ fi
 if [ $DEBUG_TXT == 1 ]; then
 	# get the FRiP measure from this MACS2 output
 	FRiP_outfile=$MACS2_outdir_ext'out_FRiP.txt'
-	if [[ ! -f $FRiP_outfile || $Overwrite == 1 ]]; then
+	if [[ ! -f $FRiP_outfile || $Overwrite == 1 ]]; then		
 		# number of reads within MACS2 narrow peaks (q threshold = 0.05)
-		macs2_nreads_narrowpeak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
+		
+		# old code - comment - sourya
+		# -c (count option) returns incorrect numbers for paired end reads
+		# macs2_nreads_narrowpeak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
+		# new code - dump filtered reads first and then count the number of reads
+		macs2_nreads_narrowpeak=`samtools view -L $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
+		
 		FRiP_narrowpeak=`bc <<< "scale=3; ($macs2_nreads_narrowpeak * 1.0) / $uniq_mapped_read"`
 
 		# number of reads within MACS2 broad peaks (q threshold = 0.05)
-		macs2_nreads_broadpeak=`samtools view -cL $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam'`
+
+		# old code - comment - sourya
+		# -c (count option) returns incorrect numbers for paired end reads
+		# macs2_nreads_broadpeak=`samtools view -cL $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam'`
+		# new code - dump filtered reads first and then count the number of reads
+		macs2_nreads_broadpeak=`samtools view -L $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
+
 		FRiP_broadpeak=`bc <<< "scale=3; ($macs2_nreads_broadpeak * 1.0) / $uniq_mapped_read"`
 
 		echo -e 'UniqMappedRead\tMappedReadNarrowpeak\tFRiPNarrowPeak\tMappedReadBroadpeak\tFRiPBroadPeak' > $FRiP_outfile
@@ -1394,7 +1423,13 @@ if [[ 0 == 1 ]]; then
 		# get the FRiP measure from this MACS2 output
 		FRiP_outfile=$MACS2_outdir'out_FRiP.txt'
 		if [[ ! -f $FRiP_outfile || $Overwrite == 1 ]]; then
-			macs2_nreads_peak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
+			
+			# old code - comment - sourya
+			# -c (count option) returns incorrect numbers for paired end reads			
+			# macs2_nreads_peak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
+			# new code - dump filtered reads first and then count the number of reads
+			macs2_nreads_peak=`samtools view -L $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
+
 			FRiP_measure=`bc <<< "scale=3; ($macs2_nreads_peak * 1.0) / $uniq_mapped_read"`
 			echo -e 'Unique mapped read\tMapped read within peaks\tFRiP' > $FRiP_outfile
 			echo -e '\n'$uniq_mapped_read'\t'$macs2_nreads_peak'\t'$FRiP_measure >> $FRiP_outfile
