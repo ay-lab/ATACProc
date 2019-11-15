@@ -64,8 +64,6 @@ Options:
 	-m  MAX_MEM          Set max memory of duplication removal [8G].
 	-a  ALIGNVALIDMAX	 Set the number of (max) valid alignments which will be searched
 	-l  MAXFRAGLEN 		 Set the maximum fragment length to be used for Bowtie2 alignment
-	-p  PEAKCALLGENOMESIZE genome size parameter for MACS2 peak calling 
-						   ("hs", "mm", "ce", "dm": default is "hs")
 	-q  MAPQ_THR		 Quality value threshold, below which the mapped reads 
 						 are to be removed (Default 30)
 
@@ -134,6 +132,9 @@ BigWigGenome=""
 # Default = 0
 Overwrite=0
 
+# default file name corresponding to the blacklisted regions
+BlackListFile=""
+
 #============================
 # reference packages / executables
 #============================
@@ -143,7 +144,8 @@ RPackageExec=`which Rscript`
 # python executable
 PythonExec=`which python`
 
-# picard_exec='/share/apps/picard-tools/picard-tools-2.7.1/picard.jar'
+# picard tool executable
+# picard_exec=`type -p picard.jar` #'/share/apps/picard-tools/picard-tools-2.7.1/picard.jar'
 
 # conversion from one or more BAM files to tag align (.gz) files
 TagAlignExec='TagAlign.sh'
@@ -177,10 +179,10 @@ BigWigCreateExec='bam_to_bigwig.sh'
 
 #============================
 
-while getopts "C:f:r:n:g:t:m:d:a:l:p:c:q:w:D:O:" opt;
+while getopts "C:f:r:n:g:t:m:d:a:l:c:q:w:D:O:" opt;
 do
 	case "$opt" in
-		C) ConfigFile=$OPTARG;;
+		C) ConfigFile=$OPTARG;;		
 		f) FASTQ1=$OPTARG;;
 		r) FASTQ2=$OPTARG;;
 		c) CONTROLBAM+=($OPTARG);;	# one or more control files can be provided
@@ -191,7 +193,6 @@ do
 		m) MAX_MEM=$OPTARG;;
 		a) MULTIMAP=$OPTARG;;
 		l) MAX_FRAG_LEN=$OPTARG;;
-		p) PEAKCALLGENOMESIZE=$OPTARG;;
 		q) MAPQ_THR=$OPTARG;;
 		w) BigWigGenome=$OPTARG;;
 		D) DEBUG_TXT=$OPTARG;;
@@ -295,6 +296,15 @@ do
 			if [ $param == "RefChrAnnotFile" ]; then
 				RefChrAnnotFile=$paramval
 			fi
+			if [ $param == "BlackListFile" ]; then
+				BlackListFile=$paramval
+			fi	
+			if [ $param == "ATAQVPath" ]; then
+				ATAQVExec=$paramval
+			fi
+			if [ $param == "TSSFile" ]; then
+				TSSFile=$paramval
+			fi
 		fi
 	fi
 done < $ConfigFile
@@ -354,57 +364,40 @@ if [[ -z $RefChrAnnotFile ]]; then
 	exit 1
 fi
 
+if [[ -z $ATAQVExec ]]; then
+	echo 'Path of ataqv executable (ParkerLab - QC of ATAC-seq data) is not provided - check the configuration file - quit !! '
+	exit 1
+fi
 
 # code in HOMER package
 # which annotates peaks according to different genomic segments
 HOMERPeakAnnotExec=$HOMERPath'/annotatePeaks.pl'
-
-# #----------------------------------
-# # select the chromosome size file according to the 
-# # reference chromosome
-# if [[ $BOWTIE2_GENOME = *"hg19"* || $BigWigGenome = *"hg19"* ]]; then
-# 	RefChrSizeFile=$Refhg19ChrSize
-# elif [[ $BOWTIE2_GENOME = *"hg38"* || $BigWigGenome = *"hg38"* ]]; then
-# 	RefChrSizeFile=$Refhg38ChrSize
-# elif [[ $BOWTIE2_GENOME = *"mm9"* || $BigWigGenome = *"mm9"* ]]; then
-# 	RefChrSizeFile=$Refmm9ChrSize
-# elif [[ $BOWTIE2_GENOME = *"mm10"* || $BigWigGenome = *"mm10"* ]]; then
-# 	RefChrSizeFile=$Refmm10ChrSize
-# fi
+HOMERMotifExec=$HOMERPath'/findMotifsGenome.pl'
 
 #----------------------------------
-# select the chromosome size file, reference fasta file, reference UCSC annotation file,
-# and the effective genome size (for normalized signal track generation) according to the 
-# reference chromosome
-# the effective genome size parameters are obtained from
+# select the reference genome, peak calling genome
+# and the effective genome size 
 # http://deeptools.readthedocs.io/en/latest/content/feature/effectiveGenomeSize.html
-if [[ $BOWTIE2_GENOME = *"hg19"* || $BigWigGenome = *"hg19"* ]]; then
-	# RefChrSizeFile=$Refhg19ChrSize
-	# RefChrFastaFile=$hg19_fastafile
-	# RefChrAnnotFile=$hg19_ucsc_annotationfile
+if [[ $BOWTIE2_GENOME = *"hg19"* || $BigWigGenome = *"hg19"* ]]; then	
 	RefGenome='hg19'
 	EGS=2864785220
+	PEAKCALLGENOMESIZE='hs'
 elif [[ $BOWTIE2_GENOME = *"hg38"* || $BigWigGenome = *"hg38"* ]]; then
-	# RefChrSizeFile=$Refhg38ChrSize
-	# RefChrFastaFile=$hg38_fastafile
-	# RefChrAnnotFile=$hg38_ucsc_annotationfile
 	RefGenome='hg38'
 	EGS=2913022398
+	PEAKCALLGENOMESIZE='hs'
 elif [[ $BOWTIE2_GENOME = *"mm9"* || $BigWigGenome = *"mm9"* ]]; then
-	# RefChrSizeFile=$Refmm9ChrSize
-	# RefChrFastaFile=$mm9_fastafile
-	# RefChrAnnotFile=$mm9_ucsc_annotationfile
 	RefGenome='mm9'
 	EGS=2620345972
+	PEAKCALLGENOMESIZE='mm'
 elif [[ $BOWTIE2_GENOME = *"mm10"* || $BigWigGenome = *"mm10"* ]]; then
-	# RefChrSizeFile=$Refmm10ChrSize
-	# RefChrFastaFile=$mm10_fastafile
-	# RefChrAnnotFile=$mm10_ucsc_annotationfile
 	RefGenome='mm10'
 	EGS=2652783500
+	PEAKCALLGENOMESIZE='mm'
 else
 	RefGenome='hg19'	# default
 	EGS=0
+	PEAKCALLGENOMESIZE='hs'
 fi
 
 #----------------------------------
@@ -437,7 +430,6 @@ del_mitch_read_bamfile=$bowtie2_outdir'Bowtie2_del_Mitch.bam'
 uniq_mapped_read_bamfile=$bowtie2_outdir'UniqMappedRead.bam'
 del_random_read_bamfile=$bowtie2_outdir'Bowtie2_del_Random.bam'
 
-
 #=========================
 # check whether fastq / bam files are provided 
 # and whether it is a single end or paired end
@@ -466,7 +458,6 @@ else
 	echo "Input file is not fasta or bam - error."; 
 	exit 1;
 fi
-
 
 #=========================
 # process the input alignment(s)
@@ -684,14 +675,12 @@ else
 		# count the number of reads after quality thresholding
 		nread_qual=`samtools view $bowtie2_BAM_prefix'.bam' | cut -f 1 | sort | uniq | wc -l`
 	fi
-
 fi
 
 #=========================
 # for the generated alignment (with quality thresholding)
 # now remove the duplicates, and generate quality statistics
 #=========================
-
 # index the sorted file
 # provided the index file either does not exist
 # or has a modification time earlier than the bam file itself
@@ -704,7 +693,11 @@ fi
 
 # now remove any PCR duplicates using Picard tool
 if [[ ! -f $bowtie2_BAM_prefix'.rmdup.bam' || $Overwrite == 1 ]]; then
-	java -Xmx$MAX_MEM -jar $picard_exec MarkDuplicates INPUT=$bowtie2_BAM_prefix'.bam' OUTPUT=$bowtie2_BAM_prefix'.rmdup.bam' ASSUME_SORTED=true REMOVE_DUPLICATES=true VALIDATION_STRINGENCY=LENIENT METRICS_FILE=$bowtie2_BAM_prefix'.picard_metrics.txt'
+	java -Xmx$MAX_MEM -jar $picard_exec MarkDuplicates -INPUT $bowtie2_BAM_prefix'.bam' -OUTPUT $bowtie2_BAM_prefix'.rmdup.bam' -ASSUME_SORTED true -REMOVE_DUPLICATES true -VALIDATION_STRINGENCY LENIENT -METRICS_FILE $bowtie2_BAM_prefix'.picard_metrics.txt'
+fi
+
+if [[ ! -f $bowtie2_BAM_prefix'.rmdup.bam.bai' ]]; then
+	samtools index $bowtie2_BAM_prefix'.rmdup.bam'
 fi
 
 if [ $DEBUG_TXT == 1 ]; then
@@ -720,7 +713,7 @@ if [ $DEBUG_TXT == 1 ]; then
 			echo -e 'TotalRawReads \t TotRead \t NumMappableRead \t nread_del_random \t nread_del_mit \t UniqMappedRead \t ReadQualThr \t rmDupRead' > $out_readcount_file
 			echo -e '\n'$fastq1_read'\t'$nread_tot'\t'$nread_mappable'\t'$nread_del_random_stuff'\t'$nread_del_mit'\t'$uniq_mapped_read'\t'$nread_qual'\t'$nread_rmdup >> $out_readcount_file
 		else
-			echo -e 'TotRead \t NumMappableRead \t nread_del_random \t nread_del_mit \t UniqMappedRead \t ReadQualThr \t rmDupRead' > $out_readcount_file
+			echo -e 'TotRead \t NumMappableRead \t nread_del_random \t nread_del_mit \t UniqMappedRead \t ReadQualThr  \t rmDupRead' > $out_readcount_file
 			echo -e '\n'$nread_tot'\t'$nread_mappable'\t'$nread_del_random_stuff'\t'$nread_del_mit'\t'$uniq_mapped_read'\t'$nread_qual'\t'$nread_rmdup >> $out_readcount_file
 		fi
 	# fi
@@ -744,28 +737,123 @@ if [ $paired_read == 1 ]; then
 	fi
 fi
 
+# #=========================
+# # add - sourya
+# # check if there is any blacklist file corresponding to the current reference genome is provided
+# # in such a case, discard the reads which overlap with the blacklisted region
+# #=========================
+# # if blacklisted genome region file is provided
+# if [[ ! -z $BlackListFile && -f $BlackListFile ]]; then
+# 	if [ ! -f $bowtie2_BAM_prefix'_possible_overlap_blacklist.bam' ]; then
+# 		# -v option reports only those entries which do not have overlap with the bed file
+# 		bedtools intersect -v -abam $bowtie2_BAM_prefix'.bam' -b $BlackListFile > $bowtie2_BAM_prefix'_remove_blacklist.bam'
+# 		# store the old copy, and also create samtools index
+# 		mv $bowtie2_BAM_prefix'.bam' $bowtie2_BAM_prefix'_possible_overlap_blacklist.bam'
+# 		samtools index $bowtie2_BAM_prefix'_possible_overlap_blacklist.bam'
+# 		# rename the new copy (without blacklisted regions) as the copy to be processed further
+# 		mv $bowtie2_BAM_prefix'_remove_blacklist.bam' $bowtie2_BAM_prefix'.bam'
+# 	fi
+# 	# get the number of reads after removing blacklisted region
+# 	numReadBlackList=`samtools view $bowtie2_BAM_prefix'.bam' | cut -f 1 | sort | uniq | wc -l`
+# else
+# 	numReadBlackList=$nread_qual
+# fi
+
 #============================
-# create a shifted tagalign file (TN5)
+# use deeptools command to create a de-duplicated BAM file 
+# and mapping quality > specified mapping quality threshold
+# and without any blacklisted genome read
+# and also forward and reverse strands are shifted according to the ATAC seq shift
+#============================
+ShiftedBAMFile=$bowtie2_BAM_prefix'_TN5_Shift.bam'
+tempfile=$bowtie2_BAM_prefix'_TN5_Shift_temp.bam'
+if [[ ! -f $ShiftedBAMFile || $Overwrite == 1 ]]; then
+	if [[ ! -z $BlackListFile && -f $BlackListFile ]]; then
+		$DeepToolsDir'/alignmentSieve' --bam $bowtie2_BAM_prefix'.rmdup.bam' --outFile $tempfile --numberOfProcessors $THREADS --ATACshift --ignoreDuplicates --minMappingQuality $MAPQ_THR --blackListFileName $BlackListFile
+	else
+		$DeepToolsDir'/alignmentSieve' --bam $bowtie2_BAM_prefix'.rmdup.bam' --outFile $tempfile --numberOfProcessors $THREADS --ATACshift --ignoreDuplicates --minMappingQuality $MAPQ_THR 
+	fi
+	# sort the file
+	samtools sort -o $ShiftedBAMFile $tempfile
+	if [[ ! -f $ShiftedBAMFile'.bai' ]]; then
+		samtools index $ShiftedBAMFile
+	fi
+	rm $tempfile
+fi
+
+#============================
+# use deeptools command on the above generated shifted BAM file
+# to get the nucleosome free reads BAM file (fragment length between 0 to 100)
+# mononucleosome reads BAM file (fragment length between 180 to 247)
+# dinucleosome reads BAM file (fragment length between 315 to 473)
+# trinucleosome reads BAM file (fragment length between 558 to 615)
+# these read lengths are obtained from 
+# https://rdrr.io/github/jianhong/ATACseqQC/man/splitGAlignmentsByCut.html
+#============================
+File_NFR=$bowtie2_outdir'/NucleosomeFree.bam'
+File_1N=$bowtie2_outdir'/mononucleosome.bam'
+File_2N=$bowtie2_outdir'/dinucleosome.bam'
+File_3N=$bowtie2_outdir'/trinucleosome.bam'
+tempfile=$bowtie2_outdir'/temp_nuc.bam'
+if [[ ! -f $File_NFR ]]; then
+	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $tempfile --numberOfProcessors $THREADS --minFragmentLength 0 --maxFragmentLength 100
+	samtools sort -o $File_NFR $tempfile
+fi
+if [[ ! -f $File_1N ]]; then
+	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $tempfile --numberOfProcessors $THREADS --minFragmentLength 180 --maxFragmentLength 247
+	samtools sort -o $File_1N $tempfile
+fi
+if [[ ! -f $File_2N ]]; then
+	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $tempfile --numberOfProcessors $THREADS --minFragmentLength 315 --maxFragmentLength 473
+	samtools sort -o $File_2N $tempfile
+fi
+if [[ ! -f $File_3N ]]; then
+	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $tempfile --numberOfProcessors $THREADS --minFragmentLength 558 --maxFragmentLength 615
+	samtools sort -o $File_3N $tempfile
+fi
+if [[ -f $tempfile ]]; then
+	rm $tempfile
+fi
+
+# combine File_1N, File_2N and File_3N
+# to get alignments of one or more nucleosomes (+1N)
+File_Nucleosome_Merge=$bowtie2_outdir'/Merged_nucleosome.bam'
+if [[ ! -f $File_Nucleosome_Merge ]]; then
+	samtools merge $File_Nucleosome_Merge $File_NFR $File_1N $File_2N $File_3N 
+	samtools index $File_Nucleosome_Merge
+fi
+
+#============================
+# create a shifted tagalign file (TN5) from the shifted BAM file
+# here no further shift operation is required
 # as mentioned in the following links:
 # https://www.biostars.org/p/187204/
 # http://seqanswers.com/forums/archive/index.php/t-59219.html
 # https://github.com/kundajelab/atac_dnase_pipelines
 #============================
-# amount of shift done in forward and reverse strand
-# for producing the TN5 shift
-# this is with respect to the original paper 
-# This tagalign file is later used for MACS2 peak calling
-fwdshft=4
-revshft=5
+# # amount of shift done in forward and reverse strand
+# # for producing the TN5 shift
+# # this is with respect to the original paper 
+# # This tagalign file is later used for MACS2 peak calling
+# fwdshft=4
+# revshft=5
 
-Shifted_TagAlign_File=$bowtie2_BAM_prefix'.TN5.tagAlign.gz'
+# Shifted_TagAlign_File=$bowtie2_BAM_prefix'.TN5.tagAlign.gz'
+Shifted_TagAlign_File=$bowtie2_BAM_prefix'_TN5_Shift.bed'
 
 if [[ ! -f $Shifted_TagAlign_File || $Overwrite == 1 ]]; then
+
+	# old command - sourya
 	# call the utility function to shift the bam file
 	# with respect to forward and reverse strands
 	# Note: the input files (which can be multiple in the target function)
-	# are placed at the last part of a command
-	$TagAlignExec -N 0 -f $fwdshft -r $revshft -O $Shifted_TagAlign_File -q $MAPQ_THR -I $bowtie2_BAM_prefix'.rmdup.bam'
+	# are placed at the last part of a command	
+	# $TagAlignExec -N 0 -f $fwdshft -r $revshft -O $Shifted_TagAlign_File -q $MAPQ_THR -I $bowtie2_BAM_prefix'.rmdup.bam'
+
+	# new command - sourya
+	# just convert the shifted BAM file in BEDPE format - use deeptools command
+	# compatible for MACS2
+	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $Shifted_TagAlign_File --BED --numberOfProcessors $THREADS
 fi
 
 # =============================
@@ -799,7 +887,8 @@ if [ $DEBUG_TXT == 1 ]; then
 
 	# NRF (Non redundant fraction) value
 	# Number of distinct uniquely mapping reads (after removing duplicates) / total number of reads
-	# other definition is number of distinct genome position for uniquely mapped reads / number of uniquely mapped reads
+	# other definition is number of distinct genome position for 
+	# uniquely mapped reads / number of uniquely mapped reads
 	# we follow this second definition (ENCODE PAPER)
 	# discriminate between single end and paired end reads
 	if [ $paired_read == 1 ]; then
@@ -808,7 +897,7 @@ if [ $DEBUG_TXT == 1 ]; then
 	else
 		NRFval=`bc <<< "scale=3; ($uniqgenomepos * 1.0) / $uniq_mapped_read"`
 	fi
-
+	
 	# number of genomic locations where exactly one read maps uniquely
 	M1=`awk '$4==1' $temp_NRF_PBC_file | wc -l`
 
@@ -862,31 +951,6 @@ if [[ ! -f $BigWig_outdir1'/'$PREFIX'_NormCov.bw' || $Overwrite == 1 ]]; then
 	fi
 fi
 
-#================
-# call the new ATAC seq quality control script with the bam file
-# having duplicates
-#================
-inpfile=$bowtie2_BAM_prefix'.bam'
-outdir=$(dirname "${inpfile}")'/ATAC_Seq_QC_New'
-mkdir -p $outdir
-
-if [[ ! -f $inpfile'.bai' ]]; then
-	samtools index $inpfile
-elif [[ $inpfile'.bai' -ot $inpfile ]]; then
-	# here -ot corresponds to "older than"
-	samtools index $inpfile
-fi
-
-# call the ATAC-seq quality control package 
-# with the appropriate settings
-# third argument: paired end read (boolean) flag
-# fourth argument: reference genome information
-
-# currently supports only hg19 or hg38 reference genome
-if [[ $RefGenome == 'hg19' || $RefGenome == 'hg38' ]]; then
-	$RPackageExec $script_dir'/ATACSeqQC.r' $inpfile $outdir $paired_read $RefGenome
-fi
-
 #===============================
 # we also create a tag align formatted bed file of the control sample(s)
 # we have to check the count and extension of the control samples
@@ -930,646 +994,424 @@ fi
 # https://www.biostars.org/p/207318/
 # https://www.biostars.org/p/209592/
 # =============================
+for MACS2COMMANDTYPE in 'Default' 'ExtSize'; do
 
-#=================================
-# calling the narrow peak version
-#=================================
+	# MACS2COMMANDTYPE = 'Default'
+	# calling MACS2 peaks with de-duplicated reads and with default commands
+	# MACS2COMMANDTYPE = 'ExtSize'
+	# calling MACS2 peaks with de-duplicated reads and with ExtSize commands
 
-#================================
-# default MACS2 parameter (P value based criterion)
-#================================
-MACS2_outdir_default=$OutDir'/MACS2_Default_Tag'
-if [[ $nctrl -gt 0 ]]; then
-	MACS2_outdir_default=$MACS2_outdir_default'_with_Control/'
-else
-	MACS2_outdir_default=$MACS2_outdir_default'_No_Control/'
-fi
-mkdir -p $MACS2_outdir_default
-
-#**************
-# derive the narrowPeaks
-#**************
-MACS2PeakOutFile=$MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak'
-if [[ ! -f $MACS2PeakOutFile || $Overwrite == 1 ]]; then
-	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2 -q '$MACS2_Q_Val' --outdir '$MACS2_outdir_default
+	echo 'Deriving MACS2 peak type : '$MACS2COMMANDTYPE
 	
-	# this is an alernate command 
-	# only invoked when the above comamnd fails
-	MACS2_alternate_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2 -q '$MACS2_Q_Val' --nomodel --extsize 147 --outdir '$MACS2_outdir_default
-
+	# current MACS2 peak output directory name
+	# depends on using the control BAM files
+	if [[ $MACS2COMMANDTYPE == 'Default' ]]; then
+		CURR_MACS2_OUTDIR=$OutDir'/MACS2_Default_Tag'
+	elif [[ $MACS2COMMANDTYPE == 'ExtSize' ]]; then
+		CURR_MACS2_OUTDIR=$OutDir'/MACS2_Ext_Tag'
+	# else
+	# 	CURR_MACS2_OUTDIR=$OutDir'/MACS2_NoDupRem_Align_Ext_Tag'
+	fi
 	if [[ $nctrl -gt 0 ]]; then
-		# include the control bed file also
-		MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
-		MACS2_alternate_cmd=$MACS2_alternate_cmd' -c '$Control_TagAlign_File_IDR
-	fi
-	# execute the command
-	# Note: the try-catch module
-	{
-		eval $MACS2_cmd	
-	} || {
-		eval $MACS2_alternate_cmd
-		echo -e 'Default MACS2 command failed. So, executing MACS2 with the default model parameters (--nomodel --extsize 147)' > $MACS2_outdir_default'/MACS2_exception.log'
-	}
-fi 	# end MACS2 file existence condition
-
-
-# filter the peaks using Q or P values
-# 9th field stores the Q value (in log10 scale)
-# 8th field stores the P value (in log10 scale)
-
-# now filter the peaks using Q value of 0.05 and 0.01 (using log10 scales)
-QFilt1File=$MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt'
-if [[ ! -f $QFilt1File || $Overwrite == 1 ]]; then
-	awk -v t=$Q_Thr1 '($9 > t)' $MACS2PeakOutFile > $QFilt1File
-fi
-
-QFilt2File=$MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt'
-if [[ ! -f $QFilt2File || $Overwrite == 1 ]]; then
-	awk -v t=$Q_Thr2 '($9 > t)' $MACS2PeakOutFile > $QFilt2File
-fi
-
-#================================
-# annotate the peaks 
-#================================
-
-#####################
-# peaks with q-value threshold of 0.01
-#####################
-
-TempPeakFile=$MACS2_outdir_default'/TempPeak_Q0.01.bed'
-
-# output directory storing the peak annotations
-# according to Homer specifications
-PeakAnnotateDir=$MACS2_outdir_default'/Peak_Annotate_Q0.01'
-mkdir -p $PeakAnnotateDir
-
-# file containing the summarized annotations of the peak files
-# according to the HOMER specifications
-OutTextFile=$PeakAnnotateDir'/Out_Summary.log'
-
-cat ${QFilt2File} | awk '{print $1"\t"$2"\t"$3"\t"$4"\t0"}' - > ${TempPeakFile}
-
-# apply HOMER specific peak annotation
-${HOMERPeakAnnotExec} ${TempPeakFile} ${RefChrFastaFile} -gtf ${RefChrAnnotFile} 2>${OutTextFile} > ${PeakAnnotateDir}'/Annotated_Peak_Q0.01filt.txt'
-
-# also obtain the distance of peaks 
-# from the nearest TSS sites
-# using the same HOMER annotation
-# check : https://www.biostars.org/p/205576/
-${HOMERPeakAnnotExec} ${QFilt2File} ${RefChrFastaFile} -size 6000 -hist 50 -bedGraph $BigWig_outdir'/Inp.Sorted.bedGraph' 2>${PeakAnnotateDir}'/Peak_Q0.01filt_TSSDist_Summary.log' > ${PeakAnnotateDir}'/Peak_Q0.01filt_TSSDist.txt'
-
-# remove the temporary peak file
-rm ${TempPeakFile}
-
-# now call an R script
-# which takes 
-# 1) the summary file 
-# and finds the percentage of different annotations for this peak file
-# and also 2) the TSS distance from the peaks
-# and plots the distribution
-$RPackageExec ../Analysis/PeakAnnotateHomerSummary.r $OutTextFile ${PeakAnnotateDir}'/Peak_Q0.01filt_TSSDist.txt'
-
-#####################
-# peaks with q-value threshold of 0.05
-#####################
-
-TempPeakFile=$MACS2_outdir_default'/TempPeak_Q0.05.bed'
-
-# output directory storing the peak annotations
-# according to Homer specifications
-PeakAnnotateDir=$MACS2_outdir_default'/Peak_Annotate_Q0.05'
-mkdir -p $PeakAnnotateDir
-
-# file containing the summarized annotations of the peak files
-# according to the HOMER specifications
-OutTextFile=$PeakAnnotateDir'/Out_Summary.log'
-
-cat ${QFilt1File} | awk '{print $1"\t"$2"\t"$3"\t"$4"\t0"}' - > ${TempPeakFile}
-
-# apply HOMER specific peak annotation
-${HOMERPeakAnnotExec} ${TempPeakFile} ${RefChrFastaFile} -gtf ${RefChrAnnotFile} 2>${OutTextFile} > ${PeakAnnotateDir}'/Annotated_Peak_Q0.05filt.txt'
-
-# also obtain the distance of peaks 
-# from the nearest TSS sites
-# using the same HOMER annotation
-# check : https://www.biostars.org/p/205576/
-${HOMERPeakAnnotExec} ${QFilt1File} ${RefChrFastaFile} -size 6000 -hist 50 -bedGraph $BigWig_outdir'/Inp.Sorted.bedGraph' 2>${PeakAnnotateDir}'/Peak_Q0.05filt_TSSDist_Summary.log' > ${PeakAnnotateDir}'/Peak_Q0.05filt_TSSDist.txt'
-
-# remove the temporary peak file
-rm ${TempPeakFile}
-
-# now call an R script
-# which takes 
-# 1) the summary file 
-# and finds the percentage of different annotations for this peak file
-# and also 2) the TSS distance from the peaks
-# and plots the distribution
-$RPackageExec ../Analysis/PeakAnnotateHomerSummary.r $OutTextFile ${PeakAnnotateDir}'/Peak_Q0.05filt_TSSDist.txt'
-
-#**************
-# derive the Broad Peaks
-#**************
-MACS2BroadPeakOutFile=$MACS2_outdir_default$PREFIX'.macs2_Broad_peaks.broadPeak'
-if [[ ! -f $MACS2BroadPeakOutFile || $Overwrite == 1 ]]; then
-	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --broad --outdir '$MACS2_outdir_default
-	
-	# this is an alernate command 
-	# only invoked when the above comamnd fails
-	MACS2_alternate_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --broad --nomodel --extsize 147 --outdir '$MACS2_outdir_default
-
-	if [[ $nctrl -gt 0 ]]; then
-		# include the control bed file also
-		MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
-		MACS2_alternate_cmd=$MACS2_alternate_cmd' -c '$Control_TagAlign_File_IDR
-	fi
-	# execute the command
-	# Note: the try-catch module
-	{
-		eval $MACS2_cmd	
-	} || {
-		eval $MACS2_alternate_cmd
-		echo -e 'Default MACS2 command failed. So, executing MACS2 with the default model parameters (--nomodel --extsize 147)' > $MACS2_outdir_default'/MACS2_Broad_exception.log'
-	}
-fi 	# end MACS2 file existence condition
-
-# filter the peaks using Q or P values
-# 9th field stores the Q value (in log10 scale)
-# 8th field stores the P value (in log10 scale)
-
-# now filter the peaks using Q value of 0.05 and 0.01 (using log10 scales)
-QFilt1FileBroad=$MACS2_outdir_default$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt'
-if [[ ! -f $QFilt1FileBroad ]]; then
-	awk -v t=$Q_Thr1 '($9 > t)' $MACS2BroadPeakOutFile > $QFilt1FileBroad
-fi
-
-QFilt2FileBroad=$MACS2_outdir_default$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.01filt'
-if [[ ! -f $QFilt2FileBroad || $Overwrite == 1 ]]; then
-	awk -v t=$Q_Thr2 '($9 > t)' $MACS2BroadPeakOutFile > $QFilt2FileBroad
-fi
-
-#**************
-# summary statistics
-#**************
-
-if [ $DEBUG_TXT == 1 ]; then
-	# get the FRiP measure from this MACS2 output
-	FRiP_outfile=$MACS2_outdir_default'out_FRiP.txt'
-	if [[ ! -f $FRiP_outfile || $Overwrite == 1 ]]; then
-		# number of reads within MACS2 narrow peaks (q threshold = 0.05)
-		
-		# old code - comment - sourya
-		# -c (count option) returns incorrect numbers for paired end reads
-		# macs2_nreads_narrowpeak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
-		# new code - dump filtered reads first and then count the number of reads
-		macs2_nreads_narrowpeak=`samtools view -L $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
-
-		FRiP_narrowpeak=`bc <<< "scale=3; ($macs2_nreads_narrowpeak * 1.0) / $uniq_mapped_read"`
-
-		# number of reads within MACS2 broad peaks (q threshold = 0.05)
-		# old code - comment - sourya
-		# -c (count option) returns incorrect numbers for paired end reads
-		# macs2_nreads_broadpeak=`samtools view -cL $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam'`
-		# new code - dump filtered reads first and then count the number of reads
-		macs2_nreads_broadpeak=`samtools view -L $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
-		
-		FRiP_broadpeak=`bc <<< "scale=3; ($macs2_nreads_broadpeak * 1.0) / $uniq_mapped_read"`
-
-		echo -e 'UniqMappedRead\tMappedReadNarrowpeak\tFRiPNarrowPeak\tMappedReadBroadpeak\tFRiPBroadPeak' > $FRiP_outfile
-		echo -e '\n'$uniq_mapped_read'\t'$macs2_nreads_narrowpeak'\t'$FRiP_narrowpeak'\t'$macs2_nreads_broadpeak'\t'$FRiP_broadpeak >> $FRiP_outfile
-	fi
-fi
-
-
-# print the summary statistics of the aligned map file
-OutPeakStatFile=$MACS2_outdir_default'/Peak_Statistics.txt'
-if [[ ! -f $OutPeakStatFile || $Overwrite == 1 ]]; then	
-	npeakNarrowPeak=`cat $MACS2PeakOutFile | wc -l`
-	npeakQ1FiltNarrowPeak=`cat $QFilt1File | wc -l`
-	npeakQ2FiltNarrowPeak=`cat $QFilt2File | wc -l`
-
-	npeakBroadPeak=`cat $MACS2PeakOutFile | wc -l`
-	npeakQ1FiltBroadPeak=`cat $QFilt1FileBroad | wc -l`
-	npeakQ2FiltBroadPeak=`cat $QFilt2FileBroad | wc -l`
-
-	echo -e 'TotNarrowPeak\tNarrowPeak_Q_0.05\tNarrowPeak_Q_0.01\tTotBroadPeak\tBroadPeak_Q_0.05\tBroadPeak_Q_0.01' > $OutPeakStatFile
-	echo -e $npeakNarrowPeak'\t'$npeakQ1FiltNarrowPeak'\t'$npeakQ2FiltNarrowPeak'\t'$npeakBroadPeak'\t'$npeakQ1FiltBroadPeak'\t'$npeakQ2FiltBroadPeak >> $OutPeakStatFile
-fi
-
-
-#================================
-# MACS2 with parameters recommended from the existing studies
-#================================
-MACS2_outdir_ext=$OutDir'/MACS2_Ext_Tag'
-if [[ $nctrl -gt 0 ]]; then
-	MACS2_outdir_ext=$MACS2_outdir_ext'_with_Control/'
-else
-	MACS2_outdir_ext=$MACS2_outdir_ext'_No_Control/'
-fi
-mkdir -p $MACS2_outdir_ext
-
-#**************
-# derive the narrowPeaks
-#**************
-MACS2PeakOutFile=$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak'
-if [[ ! -f $MACS2PeakOutFile || $Overwrite == 1 ]]; then
-	MACS2_cmd="macs2 callpeak -t "$Shifted_TagAlign_File" -f BED -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -q "$MACS2_Q_Val" --nomodel --nolambda --keep-dup all --shift -100 --extsize 200 --outdir "$MACS2_outdir_ext
-	if [[ $nctrl -gt 0 ]]; then
-		# include the control bed file also
-		MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
-	fi
-	# execute the command
-	eval $MACS2_cmd
-fi
-
-# filter the peaks using Q or P values
-# 9th field stores the Q value (in log10 scale)
-# 8th field stores the P value (in log10 scale)
-
-# now filter the peaks using Q value of 0.05 and 0.01 (using log10 scales)
-QFilt1File=$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt'
-if [[ ! -f $QFilt1File || $Overwrite == 1 ]]; then
-	awk -v t=$Q_Thr1 '($9 > t)' $MACS2PeakOutFile > $QFilt1File
-fi
-
-QFilt2File=$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt'
-if [[ ! -f $QFilt2File || $Overwrite == 1 ]]; then
-	awk -v t=$Q_Thr2 '($9 > t)' $MACS2PeakOutFile > $QFilt2File
-fi
-
-#================================
-# annotate the peaks 
-#================================
-
-#####################
-# peaks with q-value threshold of 0.01
-#####################
-
-TempPeakFile=$MACS2_outdir_ext'/TempPeak_Q0.01.bed'
-
-# output directory storing the peak annotations
-# according to Homer specifications
-PeakAnnotateDir=$MACS2_outdir_ext'/Peak_Annotate_Q0.01'
-mkdir -p $PeakAnnotateDir
-
-# file containing the summarized annotations of the peak files
-# according to the HOMER specifications
-OutTextFile=$PeakAnnotateDir'/Out_Summary.log'
-
-cat ${QFilt2File} | awk '{print $1"\t"$2"\t"$3"\t"$4"\t0"}' - > ${TempPeakFile}
-
-# apply HOMER specific peak annotation
-${HOMERPeakAnnotExec} ${TempPeakFile} ${RefChrFastaFile} -gtf ${RefChrAnnotFile} 2>${OutTextFile} > ${PeakAnnotateDir}'/Annotated_Peak_Q0.01filt.txt'
-
-# also obtain the distance of peaks 
-# from the nearest TSS sites
-# using the same HOMER annotation
-# check : https://www.biostars.org/p/205576/
-${HOMERPeakAnnotExec} ${QFilt2File} ${RefChrFastaFile} -size 6000 -hist 50 -bedGraph $BigWig_outdir'/Inp.Sorted.bedGraph' 2>${PeakAnnotateDir}'/Peak_Q0.01filt_TSSDist_Summary.log' > ${PeakAnnotateDir}'/Peak_Q0.01filt_TSSDist.txt'
-
-# remove the temporary peak file
-rm ${TempPeakFile}
-
-# now call an R script
-# which takes 
-# 1) the summary file 
-# and finds the percentage of different annotations for this peak file
-# and also 2) the TSS distance from the peaks
-# and plots the distribution
-$RPackageExec ../Analysis/PeakAnnotateHomerSummary.r $OutTextFile ${PeakAnnotateDir}'/Peak_Q0.01filt_TSSDist.txt'
-
-#####################
-# peaks with q-value threshold of 0.05
-#####################
-
-TempPeakFile=$MACS2_outdir_ext'/TempPeak_Q0.05.bed'
-
-# output directory storing the peak annotations
-# according to Homer specifications
-PeakAnnotateDir=$MACS2_outdir_ext'/Peak_Annotate_Q0.05'
-mkdir -p $PeakAnnotateDir
-
-# file containing the summarized annotations of the peak files
-# according to the HOMER specifications
-OutTextFile=$PeakAnnotateDir'/Out_Summary.log'
-
-cat ${QFilt1File} | awk '{print $1"\t"$2"\t"$3"\t"$4"\t0"}' - > ${TempPeakFile}
-
-# apply HOMER specific peak annotation
-${HOMERPeakAnnotExec} ${TempPeakFile} ${RefChrFastaFile} -gtf ${RefChrAnnotFile} 2>${OutTextFile} > ${PeakAnnotateDir}'/Annotated_Peak_Q0.05filt.txt'
-
-# also obtain the distance of peaks 
-# from the nearest TSS sites
-# using the same HOMER annotation
-# check : https://www.biostars.org/p/205576/
-${HOMERPeakAnnotExec} ${QFilt1File} ${RefChrFastaFile} -size 6000 -hist 50 -bedGraph $BigWig_outdir'/Inp.Sorted.bedGraph' 2>${PeakAnnotateDir}'/Peak_Q0.05filt_TSSDist_Summary.log' > ${PeakAnnotateDir}'/Peak_Q0.05filt_TSSDist.txt'
-
-# remove the temporary peak file
-rm ${TempPeakFile}
-
-# now call an R script
-# which takes 
-# 1) the summary file 
-# and finds the percentage of different annotations for this peak file
-# and also 2) the TSS distance from the peaks
-# and plots the distribution
-$RPackageExec ../Analysis/PeakAnnotateHomerSummary.r $OutTextFile ${PeakAnnotateDir}'/Peak_Q0.05filt_TSSDist.txt'
-
-#**************
-# derive the Broad Peaks
-#**************
-MACS2BroadPeakOutFile=$MACS2_outdir_ext$PREFIX'.macs2_Broad_peaks.broadPeak'
-if [[ ! -f $MACS2BroadPeakOutFile || $Overwrite == 1 ]]; then
-	MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --nomodel --nolambda --keep-dup all --broad --shift -100 --extsize 200 --outdir '$MACS2_outdir_ext
-	
-	if [[ $nctrl -gt 0 ]]; then
-		# include the control bed file also
-		MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
-	fi
-	# execute the command
-	eval $MACS2_cmd	
-fi 	# end MACS2 file existence condition
-
-# filter the peaks using Q or P values
-# 9th field stores the Q value (in log10 scale)
-# 8th field stores the P value (in log10 scale)
-
-# now filter the peaks using Q value of 0.05 and 0.01 (using log10 scales)
-QFilt1FileBroad=$MACS2_outdir_ext$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt'
-if [[ ! -f $QFilt1FileBroad || $Overwrite == 1 ]]; then
-	awk -v t=$Q_Thr1 '($9 > t)' $MACS2BroadPeakOutFile > $QFilt1FileBroad
-fi
-
-QFilt2FileBroad=$MACS2_outdir_ext$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.01filt'
-if [[ ! -f $QFilt2FileBroad || $Overwrite == 1 ]]; then
-	awk -v t=$Q_Thr2 '($9 > t)' $MACS2BroadPeakOutFile > $QFilt2FileBroad
-fi
-
-#**************
-# summary statistics
-#**************
-
-if [ $DEBUG_TXT == 1 ]; then
-	# get the FRiP measure from this MACS2 output
-	FRiP_outfile=$MACS2_outdir_ext'out_FRiP.txt'
-	if [[ ! -f $FRiP_outfile || $Overwrite == 1 ]]; then		
-		# number of reads within MACS2 narrow peaks (q threshold = 0.05)
-		
-		# old code - comment - sourya
-		# -c (count option) returns incorrect numbers for paired end reads
-		# macs2_nreads_narrowpeak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
-		# new code - dump filtered reads first and then count the number of reads
-		macs2_nreads_narrowpeak=`samtools view -L $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
-		
-		FRiP_narrowpeak=`bc <<< "scale=3; ($macs2_nreads_narrowpeak * 1.0) / $uniq_mapped_read"`
-
-		# number of reads within MACS2 broad peaks (q threshold = 0.05)
-
-		# old code - comment - sourya
-		# -c (count option) returns incorrect numbers for paired end reads
-		# macs2_nreads_broadpeak=`samtools view -cL $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam'`
-		# new code - dump filtered reads first and then count the number of reads
-		macs2_nreads_broadpeak=`samtools view -L $QFilt1FileBroad $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
-
-		FRiP_broadpeak=`bc <<< "scale=3; ($macs2_nreads_broadpeak * 1.0) / $uniq_mapped_read"`
-
-		echo -e 'UniqMappedRead\tMappedReadNarrowpeak\tFRiPNarrowPeak\tMappedReadBroadpeak\tFRiPBroadPeak' > $FRiP_outfile
-		echo -e '\n'$uniq_mapped_read'\t'$macs2_nreads_narrowpeak'\t'$FRiP_narrowpeak'\t'$macs2_nreads_broadpeak'\t'$FRiP_broadpeak >> $FRiP_outfile
-	fi
-fi
-
-# print the summary statistics of the aligned map file
-OutPeakStatFile=$MACS2_outdir_ext'/Peak_Statistics.txt'
-if [[ ! -f $OutPeakStatFile || $Overwrite == 1 ]]; then	
-	npeakNarrowPeak=`cat $MACS2PeakOutFile | wc -l`
-	npeakQ1FiltNarrowPeak=`cat $QFilt1File | wc -l`
-	npeakQ2FiltNarrowPeak=`cat $QFilt2File | wc -l`
-
-	npeakBroadPeak=`cat $MACS2PeakOutFile | wc -l`
-	npeakQ1FiltBroadPeak=`cat $QFilt1FileBroad | wc -l`
-	npeakQ2FiltBroadPeak=`cat $QFilt2FileBroad | wc -l`
-
-	echo -e 'TotNarrowPeak\tNarrowPeak_Q_0.05\tNarrowPeak_Q_0.01\tTotBroadPeak\tBroadPeak_Q_0.05\tBroadPeak_Q_0.01' > $OutPeakStatFile
-	echo -e $npeakNarrowPeak'\t'$npeakQ1FiltNarrowPeak'\t'$npeakQ2FiltNarrowPeak'\t'$npeakBroadPeak'\t'$npeakQ1FiltBroadPeak'\t'$npeakQ2FiltBroadPeak >> $OutPeakStatFile
-fi
-
-# #================================
-# # here analyze the MACS2 output 
-# # from the default command
-# # and the extsize command
-# # compute peak overlap statistics
-# #================================
-
-# PeakOverlapOutDir=$OutDir'/Peak_Overlap_Statistics'
-# mkdir -p $PeakOverlapOutDir
-
-# if [ ! -f $PeakOverlapOutDir'/Peak_Overlap.txt' ]; then
-# 	/home/sourya/R-3.4.3/bin/Rscript $PeakOverlapCode --FileList $MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt':$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt' --Labels 'MACS2_Default':'MACS2_Ext' --OutPrefix $PeakOverlapOutDir'/Peak_Ov' --Dump
-# fi
-
-#================================
-# MACS2 with parameters recommended from the existing studies
-# **** TEST ---- here, sorted alignment file before duplicate removal is used for MACS2
-#================================
-
-# comment - sourya - for the moment
-if [[ 0 == 1 ]]; then
-
-	MACS2_outdir=$OutDir'/MACS2_NoDupRem_Align_Ext_Tag'
-	if [[ $nctrl -gt 0 ]]; then
-		MACS2_outdir=$MACS2_outdir'_with_Control/'
+		CURR_MACS2_OUTDIR=$CURR_MACS2_OUTDIR'_with_Control/'
 	else
-		MACS2_outdir=$MACS2_outdir'_No_Control/'
+		CURR_MACS2_OUTDIR=$CURR_MACS2_OUTDIR'_No_Control/'
 	fi
-	mkdir -p $MACS2_outdir
+	mkdir -p $CURR_MACS2_OUTDIR
 
-	# first form the command
-	MACS2PeakOutFile=$MACS2_outdir$PREFIX'.macs2_peaks.narrowPeak'
-	if [[ ! -f $MACS2PeakOutFile || $Overwrite == 1 ]]; then
-		MACS2_cmd="macs2 callpeak -t "$bowtie2_BAM_prefix".bam -f BAM -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -q "$MACS2_Q_Val" --nomodel --nolambda --keep-dup all --shift -100 --extsize 200 --outdir "$MACS2_outdir
-		if [[ $nctrl -gt 0 ]]; then
-			# include the control bed file also
-			MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
+	# now classify according to the peak type : narrow peak or broad peak
+	for PEAKTYPE in 'narrow' 'broad'; do
+
+		# if [[ $MACS2COMMANDTYPE == 'noDupRem' && $PEAKTYPE == 'broad' ]]; then
+		# 	continue
+		# fi
+
+		# current MACS2 output peak file
+		if [[ $PEAKTYPE == 'narrow' ]]; then
+			MACS2PeakOutFile=$CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak'
+		else
+			MACS2PeakOutFile=$CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak'
 		fi
-		# execute the command
-		$MACS2_cmd
-	fi
 
-	# filter the peaks using Q or P values
-	# 9th field stores the Q value (in log10 scale)
-	# 8th field stores the P value (in log10 scale)
+		# check if the peak file already exists
+		if [[ ! -f $MACS2PeakOutFile || $Overwrite == 1 ]]; then
+			if [[ $MACS2COMMANDTYPE == 'Default' && $PEAKTYPE == 'narrow' ]]; then
+				# main MACS2 command
+				MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2 -q '$MACS2_Q_Val' --keep-dup all --call-summits --outdir '$CURR_MACS2_OUTDIR
+				# this is an alernate command 
+				# only invoked when the above comamnd fails
+				MACS2_alternate_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2 -q '$MACS2_Q_Val' --nomodel --extsize 147 --keep-dup all --call-summits --outdir '$CURR_MACS2_OUTDIR
+				if [[ $nctrl -gt 0 ]]; then
+					# include the control bed file also
+					MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
+					MACS2_alternate_cmd=$MACS2_alternate_cmd' -c '$Control_TagAlign_File_IDR
+				fi
+				# execute the command
+				# Note: the try-catch module
+				{
+					eval $MACS2_cmd	
+				} || {
+					eval $MACS2_alternate_cmd
+					echo -e 'Default MACS2 command failed. So, executing MACS2 with the default model parameters (--nomodel --extsize 147)' > $CURR_MACS2_OUTDIR'/MACS2_exception.log'
+				}
 
-	# now filter the peaks using Q value of 0.05 and 0.01 (using log10 scales)
-	QFilt1File=$MACS2_outdir$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt'
-	if [[ ! -f $QFilt1File || $Overwrite == 1 ]]; then
-		awk -v t=$Q_Thr1 '($9 > t)' $MACS2PeakOutFile > $QFilt1File
-	fi
+			elif [[ $MACS2COMMANDTYPE == 'Default' && $PEAKTYPE == 'broad' ]]; then
+				# main MACS2 command
+				MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --keep-dup all --broad --outdir '$CURR_MACS2_OUTDIR	
+				# this is an alernate command 
+				# only invoked when the above comamnd fails
+				MACS2_alternate_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --keep-dup all --broad --nomodel --extsize 147 --outdir '$CURR_MACS2_OUTDIR
+				if [[ $nctrl -gt 0 ]]; then
+					# include the control bed file also
+					MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
+					MACS2_alternate_cmd=$MACS2_alternate_cmd' -c '$Control_TagAlign_File_IDR
+				fi
+				# execute the command
+				# Note: the try-catch module
+				{
+					eval $MACS2_cmd	
+				} || {
+					eval $MACS2_alternate_cmd
+					echo -e 'Default MACS2 command failed. So, executing MACS2 with the default model parameters (--nomodel --extsize 147)' > $CURR_MACS2_OUTDIR'/MACS2_Broad_exception.log'
+				}
 
-	QFilt2File=$MACS2_outdir$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt'
-	if [[ ! -f $QFilt2File || $Overwrite == 1 ]]; then
-		awk -v t=$Q_Thr2 '($9 > t)' $MACS2PeakOutFile > $QFilt2File
-	fi
+			elif [[ $MACS2COMMANDTYPE == 'ExtSize' && $PEAKTYPE == 'narrow' ]]; then
+				# main MACS2 command
+				MACS2_cmd="macs2 callpeak -t "$Shifted_TagAlign_File" -f BED -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -q "$MACS2_Q_Val" --nomodel --nolambda --shift -100 --extsize 200 --keep-dup all --call-summits --outdir "$CURR_MACS2_OUTDIR
+				if [[ $nctrl -gt 0 ]]; then
+					# include the control bed file also
+					MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
+				fi
+				# execute the command
+				eval $MACS2_cmd
 
-	# print the summary statistics of the aligned map file
-	OutPeakStatFile=$MACS2_outdir'/Peak_Statistics.txt'
-	if [[ ! -f $OutPeakStatFile || $Overwrite == 1 ]]; then	
-		npeak=`cat $MACS2PeakOutFile | wc -l`
-		npeakQ1Filt=`cat $QFilt1File | wc -l`
-		npeakQ2Filt=`cat $QFilt2File | wc -l`
-		echo -e 'TotPeak\tPeak_Q_0.05\tPeak_Q_0.01' > $OutPeakStatFile
-		echo -e $npeak'\t'$npeakQ1Filt'\t'$npeakQ2Filt >> $OutPeakStatFile
-	fi
+			elif [[ $MACS2COMMANDTYPE == 'ExtSize' && $PEAKTYPE == 'broad' ]]; then
+				# main MACS2 command
+				MACS2_cmd='macs2 callpeak -t '$Shifted_TagAlign_File' -f BED -g '$PEAKCALLGENOMESIZE' -n '$PREFIX'.macs2_Broad -q '$MACS2_Q_Val' --nomodel --nolambda --broad --shift -100 --extsize 200 --keep-dup all --outdir '$CURR_MACS2_OUTDIR
+				if [[ $nctrl -gt 0 ]]; then
+					# include the control bed file also
+					MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
+				fi
+				# execute the command
+				eval $MACS2_cmd	
 
+			# elif [[ $MACS2COMMANDTYPE == 'noDupRem' && $PEAKTYPE == 'narrow' ]]; then
+			# 	# main MACS2 command
+			# 	MACS2_cmd="macs2 callpeak -t "$bowtie2_BAM_prefix".bam -f BAM -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -q "$MACS2_Q_Val" --nomodel --nolambda --shift -100 --extsize 200 --keep-dup all --call-summits --outdir "$CURR_MACS2_OUTDIR
+			# 	# if [[ $nctrl -gt 0 ]]; then
+			# 	# 	# include the control bed file also
+			# 	# 	MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
+			# 	# fi
+			# 	# execute the command
+			# 	$MACS2_cmd
+
+			fi
+
+		fi 	# end check MACS2 peak file existence
+
+		# filter the peaks using Q value of 0.05 and 0.01 (using log10 scales) - 9th field
+		for FDRpct in 5 1; do
+			#============
+			# q-value based filtering
+			#============
+			QFiltFile=$MACS2PeakOutFile'_Q0.0'$FDRpct'filt'
+			if [ $FDRpct == 5 ]; then
+				QValThr=$Q_Thr1
+			else
+				QValThr=$Q_Thr2
+			fi
+			# sourya - currently commented
+			if [[ ! -f $QFiltFile || $Overwrite == 1 ]]; then
+				awk -v t=$QValThr '($9 > t)' $MACS2PeakOutFile > $QFiltFile
+			fi
+
+			#============
+			# also annotate the peaks using HOMER
+			#============
+			TempPeakFile=$CURR_MACS2_OUTDIR'/TempPeak_Q0.0'$FDRpct'.bed'
+			# output directory storing the peak annotations
+			PeakAnnotateDir=$CURR_MACS2_OUTDIR'/Peak_Annotate_Q0.0'$FDRpct
+			mkdir -p $PeakAnnotateDir
+
+			cat ${QFiltFile} | awk '{print $1"\t"$2"\t"$3"\t"$4"\t0"}' - > ${TempPeakFile}
+
+			# file containing the summarized annotations of the peak files
+			OutTextFile=$PeakAnnotateDir'/Out_Summary.log'
+			
+			if [[ ! -f $OutTextFile || ! -f ${PeakAnnotateDir}'/Annotated_Peak_Q0.0'$FDRpct'filt.txt' || ! -f ${PeakAnnotateDir}'/Peak_Q0.0'$FDRpct'filt_TSSDist.txt' ]]; then
+
+				# apply HOMER specific peak annotation
+				${HOMERPeakAnnotExec} ${TempPeakFile} ${RefChrFastaFile} -gtf ${RefChrAnnotFile} 2>${OutTextFile} > ${PeakAnnotateDir}'/Annotated_Peak_Q0.0'$FDRpct'filt.txt'
+			
+				# also obtain the distance of peaks from the nearest TSS sites 
+				# using the HOMER annotation
+				# check : https://www.biostars.org/p/205576/
+				${HOMERPeakAnnotExec} ${QFiltFile} ${RefChrFastaFile} -size 6000 -hist 50 -bedGraph $BigWig_outdir'/Inp.Sorted.bedGraph' 2>${PeakAnnotateDir}'/Peak_Q0.0'$FDRpct'filt_TSSDist_Summary.log' > ${PeakAnnotateDir}'/Peak_Q0.0'$FDRpct'filt_TSSDist.txt'
+
+				# remove the temporary peak file
+				rm ${TempPeakFile}
+			
+				# now call an R script which takes the summary file 
+				# and finds the percentage of different annotations for this peak file
+				# and also 2) the TSS distance from the peaks, and plots the distribution
+				$RPackageExec ../Analysis/PeakAnnotateHomerSummary.r $OutTextFile ${PeakAnnotateDir}'/Peak_Q0.0'$FDRpct'filt_TSSDist.txt'
+
+			fi
+
+			#===============
+			# create big bed file of the peaks for visualization in UCSC genome browser
+			#===============
+			if [[ $MACS2COMMANDTYPE == 'Default' || $MACS2COMMANDTYPE == 'ExtSize' ]]; then
+				if [[ $PEAKTYPE == 'narrow' ]]; then
+					
+					MACS2PeakBigBedFile=$CURR_MACS2_OUTDIR$PREFIX'_bigNarrowPeak_Q0.0'$FDRpct'filt_MACS2_'$MACS2COMMANDTYPE'.bb'
+
+					if [[ ! -f $MACS2PeakBigBedFile ]]; then
+					
+						tempPeakFile=$CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak_Q0.0'$FDRpct'filt_MACS2_'$MACS2COMMANDTYPE'_reduced'
+					
+						# first modify the detected peaks to be compatible with the processing of Bigbed utility
+						# clipping the 5th field (score) of the MACS2 detected peaks within 1000
+						# Note: narrowPeak file has 10 fields
+						cat $QFiltFile | awk '{if ($1 ~ /^chr([1-9]|2[0-2]|1[0-9]|X|Y)$/) {print $0}}' - | awk 'function min(p,q) {return p < q ? p : q} {print $1"\t"$2"\t"$3"\t"$4"\t"min($5,1000)"\t"$6"\t"$7"\t"$8"\t"$9"\t"$10}' - > $tempPeakFile
+					
+						# now convert the converted peak file to the bigbed format
+						# check the reference chromosome information
+						# from either the input Bowtie2 alignment or the BigWigGenome
+						# Note: we have adjusted the value of RefChrSizeFile
+						# according to the reference genome provided
+						bedToBigBed -as=${BigNarrowPeakASFile} -type=bed6+4 $tempPeakFile $RefChrSizeFile $MACS2PeakBigBedFile
+						
+						# delete the temporary peak file
+						rm $tempPeakFile
+
+					fi
+
+				else					
+					
+					MACS2BroadPeakBigBedFile=$CURR_MACS2_OUTDIR$PREFIX'_bigBroadPeak_Q0.0'$FDRpct'filt_MACS2_'$MACS2COMMANDTYPE'.bb'
+					
+					if [[ ! -f $MACS2BroadPeakBigBedFile ]]; then
+
+						tempBroadPeakFile=$CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak_MACS2_'$MACS2COMMANDTYPE'_Q0.0'$FDRpct'filt_reduced'
+						
+						# first modify the detected peaks to be compatible with the processing of Bigbed utility
+						# clipping the 5th field (score) of the MACS2 detected peaks within 1000
+						cat $QFiltFile | awk '{if ($1 ~ /^chr([1-9]|2[0-2]|1[0-9]|X|Y)$/) {print $0}}' - | awk 'function min(p,q) {return p < q ? p : q} {print $1"\t"$2"\t"$3"\t"$4"\t"min($5,1000)"\t"$6"\t"$7"\t"$8"\t"$9}' - > $tempBroadPeakFile
+						# now convert the converted peak file to the bigbed format
+						# check the reference chromosome information
+						# from either the input Bowtie2 alignment or the BigWigGenome
+						# Note: we have adjusted the value of RefChrSizeFile
+						# according to the reference genome provided
+						bedToBigBed -as=${BroadPeakASFile} -type=bed6+4 $tempBroadPeakFile $RefChrSizeFile $MACS2BroadPeakBigBedFile
+						# delete the temporary peak file
+						rm $tempBroadPeakFile
+
+					fi					
+				fi
+			fi
+
+		done 	# end FDRpct loop
+
+	done 	# end PEAKTYPE loop
+
+	#================
+	# summary statistics
+	#================
 	if [ $DEBUG_TXT == 1 ]; then
 		# get the FRiP measure from this MACS2 output
-		FRiP_outfile=$MACS2_outdir'out_FRiP.txt'
+		FRiP_outfile=$CURR_MACS2_OUTDIR'out_FRiP.txt'
+
 		if [[ ! -f $FRiP_outfile || $Overwrite == 1 ]]; then
+			# number of reads within MACS2 narrow peaks (q threshold = 0.05)
 			
 			# old code - comment - sourya
-			# -c (count option) returns incorrect numbers for paired end reads			
-			# macs2_nreads_peak=`samtools view -cL $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam'`
+			# -c (count option) returns incorrect numbers for paired end reads
+			# macs2_nreads_narrowpeak=`samtools view -cL $CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt' $bowtie2_BAM_prefix'.rmdup.bam'`
 			# new code - dump filtered reads first and then count the number of reads
-			macs2_nreads_peak=`samtools view -L $QFilt1File $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
+			macs2_nreads_narrowpeak=`samtools view -L $CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt' $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
+			FRiP_narrowpeak=`bc <<< "scale=3; ($macs2_nreads_narrowpeak * 1.0) / $uniq_mapped_read"`
 
-			FRiP_measure=`bc <<< "scale=3; ($macs2_nreads_peak * 1.0) / $uniq_mapped_read"`
-			echo -e 'Unique mapped read\tMapped read within peaks\tFRiP' > $FRiP_outfile
-			echo -e '\n'$uniq_mapped_read'\t'$macs2_nreads_peak'\t'$FRiP_measure >> $FRiP_outfile
+			# number of reads within MACS2 broad peaks (q threshold = 0.05)
+			# old code - comment - sourya
+			# -c (count option) returns incorrect numbers for paired end reads
+			# macs2_nreads_broadpeak=`samtools view -cL $CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt' $bowtie2_BAM_prefix'.rmdup.bam'`
+			# new code - dump filtered reads first and then count the number of reads
+			macs2_nreads_broadpeak=`samtools view -L $CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt' $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`		
+			FRiP_broadpeak=`bc <<< "scale=3; ($macs2_nreads_broadpeak * 1.0) / $uniq_mapped_read"`
+
+			echo -e 'UniqMappedRead\tMappedReadNarrowpeak\tFRiPNarrowPeak\tMappedReadBroadpeak\tFRiPBroadPeak' > $FRiP_outfile
+			echo -e '\n'$uniq_mapped_read'\t'$macs2_nreads_narrowpeak'\t'$FRiP_narrowpeak'\t'$macs2_nreads_broadpeak'\t'$FRiP_broadpeak >> $FRiP_outfile
 		fi
+	fi 	# end DEBUG_TXT condition
+
+	# print the summary statistics of the aligned map file
+	OutPeakStatFile=$CURR_MACS2_OUTDIR'/Peak_Statistics.txt'
+	if [[ ! -f $OutPeakStatFile || $Overwrite == 1 ]]; then	
+		# summary for narrow peaks
+		npeakNarrowPeak=`cat $CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak' | wc -l`
+		npeakQ1FiltNarrowPeak=`cat $CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt' | wc -l`
+		npeakQ2FiltNarrowPeak=`cat $CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt' | wc -l`
+
+		# summary for broad peaks
+		npeakBroadPeak=`cat $CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak' | wc -l`
+		npeakQ1FiltBroadPeak=`cat $CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt' | wc -l`
+		npeakQ2FiltBroadPeak=`cat $CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.01filt' | wc -l`
+
+		echo -e 'TotNarrowPeak\tNarrowPeak_Q_0.05\tNarrowPeak_Q_0.01\tTotBroadPeak\tBroadPeak_Q_0.05\tBroadPeak_Q_0.01' > $OutPeakStatFile
+		echo -e $npeakNarrowPeak'\t'$npeakQ1FiltNarrowPeak'\t'$npeakQ2FiltNarrowPeak'\t'$npeakBroadPeak'\t'$npeakQ1FiltBroadPeak'\t'$npeakQ2FiltBroadPeak >> $OutPeakStatFile
 	fi
 
-fi # end dummy if
-
-#=========================
-# processing MACS2 default command output 
-# converting narrow peak and broad peak files
-# to bigNarrowPeak format
-# for display in the UCSC genome browser
-#=========================
-
-#****************
-# convert the narrowPeak with FDR threshold = 0.05
-# in the big bed format
-#****************
-QFilt1File=$MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt'
-MACS2PeakBigBedFile=$MACS2_outdir_default$PREFIX'_bigNarrowPeak_Q0.05filt_MACS2_Default.bb'
-tempPeakFile=$MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt_MACS2_Default_reduced'
-
-# first modify the detected peaks
-# to be compatible with the processing of Bigbed utility
-# clipping the 5th field (score) of the MACS2 detected peaks
-# within 1000
-# Note: narrowPeak file has 10 fields
-cat $QFilt1File | awk '{if ($1 ~ /^chr([1-9]|2[0-2]|1[0-9]|X|Y)$/) {print $0}}' - | awk 'function min(p,q) {return p < q ? p : q} {print $1"\t"$2"\t"$3"\t"$4"\t"min($5,1000)"\t"$6"\t"$7"\t"$8"\t"$9"\t"$10}' - > $tempPeakFile
-
-# now convert the converted peak file to the bigbed format
-# check the reference chromosome information
-# from either the input Bowtie2 alignment
-# or the BigWigGenome
-
-# Note: we have adjusted the value of RefChrSizeFile
-# according to the reference genome provided
-bedToBigBed -as=${BigNarrowPeakASFile} -type=bed6+4 $tempPeakFile $RefChrSizeFile $MACS2PeakBigBedFile
-
-# delete the temporary peak file
-rm $tempPeakFile
-
-#****************
-# convert the broadPeak with FDR threshold = 0.05
-# in the big bed format
-#****************
-QFilt1FileBroad=$MACS2_outdir_default$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt'
-MACS2BroadPeakBigBedFile=$MACS2_outdir_default$PREFIX'_bigBroadPeak_Q0.05filt_MACS2_Default.bb'
-tempBroadPeakFile=$MACS2_outdir_default$PREFIX'.macs2_Broad_peaks.narrowPeak_MACS2_Default_Q0.05filt_reduced'
-
-# first modify the detected peaks
-# to be compatible with the processing of Bigbed utility
-# clipping the 5th field (score) of the MACS2 detected peaks
-# within 1000
-# Note: broadPeak file has 9 fields
-cat $QFilt1FileBroad | awk '{if ($1 ~ /^chr([1-9]|2[0-2]|1[0-9]|X|Y)$/) {print $0}}' - | awk 'function min(p,q) {return p < q ? p : q} {print $1"\t"$2"\t"$3"\t"$4"\t"min($5,1000)"\t"$6"\t"$7"\t"$8"\t"$9}' - > $tempBroadPeakFile
-
-# now convert the converted peak file to the bigbed format
-# check the reference chromosome information
-# from either the input Bowtie2 alignment
-# or the BigWigGenome
-
-# Note: we have adjusted the value of RefChrSizeFile
-# according to the reference genome provided
-bedToBigBed -as=${BroadPeakASFile} -type=bed6+4 $tempBroadPeakFile $RefChrSizeFile $MACS2BroadPeakBigBedFile
-
-# delete the temporary peak file
-rm $tempBroadPeakFile
+done 	# end MACS2COMMANDTYPE loop
 
 
+#================================
+# run ataqv QC pipeline using the aligned BAM file (with blacklisted regions)
+# reference genome TSS file
+# blacklist genome file (if provided)
+# and the broadpeak file 
+#================================
+ATACQVOutDir=$OutDir'/QC_ataqv_ParkerLab'
+mkdir -p $ATACQVOutDir
 
-#=========================
-# processing MACS2 extsize command output 
-# converting narrow peak and broad peak files
-# to bigNarrowPeak format
-# for display in the UCSC genome browser
-#=========================
+# we consider broad peaks generated from 'ExtSize' peak option
+CURR_MACS2_OUTDIR=$OutDir'/MACS2_Ext_Tag'
 
-#****************
-# convert the narrowPeak with FDR threshold = 0.05
-# in the big bed format
-#****************
-QFilt1File=$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt'
-MACS2PeakBigBedFile=$MACS2_outdir_ext$PREFIX'_bigNarrowPeak_Q0.05filt_MACS2_Ext.bb'
-tempPeakFile=$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt_MACS2_Ext_reduced'
+if [[ ! -z $BlackListFile && -f $BlackListFile ]]; then	
+	# prefix string of output json file name which will be the output of ataqv pipeline
+	outJsonFilenamePrefix=$ATACQVOutDir'/'$PREFIX'_ataqv_with_blacklist_MACS2_Ext_Tag'
+else
+	# prefix string of output json file name which will be the output of ataqv pipeline
+	outJsonFilenamePrefix=$ATACQVOutDir'/'$PREFIX'_ataqv_without_blacklist_MACS2_Ext_Tag'
+fi
+if [[ $nctrl -gt 0 ]]; then
+	outJsonFilenamePrefix=$outJsonFilenamePrefix'_with_Control'
+	CURR_MACS2_OUTDIR=$CURR_MACS2_OUTDIR'_with_Control/'
+else
+	outJsonFilenamePrefix=$outJsonFilenamePrefix'_No_Control'
+	CURR_MACS2_OUTDIR=$CURR_MACS2_OUTDIR'_No_Control/'
+fi
 
-# first modify the detected peaks
-# to be compatible with the processing of Bigbed utility
-# clipping the 5th field (score) of the MACS2 detected peaks
-# within 1000
-# Note: narrowPeak file has 10 fields
-cat $QFilt1File | awk '{if ($1 ~ /^chr([1-9]|2[0-2]|1[0-9]|X|Y)$/) {print $0}}' - | awk 'function min(p,q) {return p < q ? p : q} {print $1"\t"$2"\t"$3"\t"$4"\t"min($5,1000)"\t"$6"\t"$7"\t"$8"\t"$9"\t"$10}' - > $tempPeakFile
-
-# now convert the converted peak file to the bigbed format
-# check the reference chromosome information
-# from either the input Bowtie2 alignment
-# or the BigWigGenome
-
-# Note: we have adjusted the value of RefChrSizeFile
-# according to the reference genome provided
-bedToBigBed -as=${BigNarrowPeakASFile} -type=bed6+4 $tempPeakFile $RefChrSizeFile $MACS2PeakBigBedFile
-
-# delete the temporary peak file
-rm $tempPeakFile
-
-#****************
-# convert the broadPeak with FDR threshold = 0.05
-# in the big bed format
-#****************
-QFilt1FileBroad=$MACS2_outdir_ext$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt'
-MACS2BroadPeakBigBedFile=$MACS2_outdir_ext$PREFIX'_bigBroadPeak_Q0.05filt_MACS2_Ext.bb'
-tempBroadPeakFile=$MACS2_outdir_ext$PREFIX'.macs2_Broad_peaks.narrowPeak_MACS2_Ext_Q0.05filt_reduced'
-
-# first modify the detected peaks
-# to be compatible with the processing of Bigbed utility
-# clipping the 5th field (score) of the MACS2 detected peaks
-# within 1000
-# Note: broadPeak file has 10 fields
-cat $QFilt1FileBroad | awk '{if ($1 ~ /^chr([1-9]|2[0-2]|1[0-9]|X|Y)$/) {print $0}}' - | awk 'function min(p,q) {return p < q ? p : q} {print $1"\t"$2"\t"$3"\t"$4"\t"min($5,1000)"\t"$6"\t"$7"\t"$8"\t"$9}' - > $tempBroadPeakFile
-
-# now convert the converted peak file to the bigbed format
-# check the reference chromosome information
-# from either the input Bowtie2 alignment
-# or the BigWigGenome
-
-# Note: we have adjusted the value of RefChrSizeFile
-# according to the reference genome provided
-bedToBigBed -as=${BroadPeakASFile} -type=bed6+4 $tempBroadPeakFile $RefChrSizeFile $MACS2BroadPeakBigBedFile
-
-# delete the temporary peak file
-rm $tempBroadPeakFile
+for FDRpct in 5 1; do
+	inpBroadPeakFile=$CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.0'$FDRpct'filt'
+	outJsonFilename=$outJsonFilenamePrefix'_Q0.0'$FDRpct'filt.ataqv.json.gz'	
+	if [[ ! -z $BlackListFile && -f $BlackListFile ]]; then	
+		# call ataqv pipeline with blacklisted genome region
+		$ATAQVExec --peak-file $inpBroadPeakFile --name $PREFIX --metrics-file $outJsonFilename --excluded-region-file $BlackListFile --tss-file ${RefChrAnnotFile} --ignore-read-groups human $bowtie2_BAM_prefix'.rmdup.bam' > $ATACQVOutDir'/'$PREFIX'.ataqv.out'
+	else
+		# call ataqv pipeline
+		$ATAQVExec --peak-file $inpBroadPeakFile --name $PREFIX --metrics-file $outJsonFilename --tss-file ${RefChrAnnotFile} --ignore-read-groups human $bowtie2_BAM_prefix'.rmdup.bam' > $ATACQVOutDir'/'$PREFIX'.ataqv.out'
+	fi
+done
 
 
-# #=============================
-# # now we check for individual peaks (detected from MACS2)
-# # the number of reads mapped into this peak
-# # also we measure the peak length
-# #=============================
-# python ../src/peak_distribution.py -I $MACS2_outdir2 $PREFIX'.macs2_peaks.broadPeak' -R $bowtie2_BAM_prefix'.rmdup.MAPQ'$MAPQ_THR'.bam'
-# python ../src/peak_distribution.py -I $MACS2_outdir1 $PREFIX'.macs2_peaks.narrowPeak' -R $bowtie2_BAM_prefix'.rmdup.MAPQ'$MAPQ_THR'.bam'
+#================================
+# analyzing TF footprints
+#================================
+# for FDRpct in 5 1; do
+for FDRpct in 5; do
+	if [[ $nctrl -gt 0 ]]; then	
+		inpPeakFile=$OutDir'/MACS2_Ext_Tag_with_Control/'$PREFIX'.macs2_peaks.narrowPeak_Q0.0'$FDRpct'filt'
+		MotifOutDir=$OutDir'/Motif_MACS2_Ext_Tag_with_Control_narrowPeak_Q0.0'$FDRpct'filt'
+	else
+		inpPeakFile=$OutDir'/MACS2_Ext_Tag_No_Control/'$PREFIX'.macs2_peaks.narrowPeak_Q0.0'$FDRpct'filt'
+		MotifOutDir=$OutDir'/Motif_MACS2_Ext_Tag_No_Control_narrowPeak_Q0.0'$FDRpct'filt'
+	fi
+
+	for summitoffsetval in 500 200; do
+	# for summitoffsetval in 200; do
+		
+		motifPeakFile=$MotifOutDir'/Motif_Complete_Peaks_SummitOffset_'$summitoffsetval'/Peaks_Summit_Offset_'$summitoffsetval'bp.bed'
+
+		# analyzing complete set of peaks, and extracting summits
+		$RPackageExec ../Imp_Scripts/Motif_HOMER.R --MotifFindExec $HOMERMotifExec --RefGenome $RefGenome --PeakFile $inpPeakFile --OutDir $MotifOutDir --SummitOffset $summitoffsetval	
+		
+		# call HINT-ATAC specific motif footprinting
+		$RPackageExec ../Imp_Scripts/Footprint_HINT_ATAC.R --MotifPeak $motifPeakFile --AllRead $ShiftedBAMFile --NFRRead $File_NFR --NFRANDNuclRead $File_Nucleosome_Merge --OutDir $MotifOutDir'/Motif_Complete_Peaks_SummitOffset_'$summitoffsetval'/Footprint_HINT_ATAC' --RefGenome $RefGenome --PE $paired_read				
+		
+		# motif finding by filtering peaks such that -log10(p-value) > 50
+		pvalThr=50
+		
+		motifPeakFile=$MotifOutDir'/Motif_Peaks_PvalThr_'$pvalThr'_SummitOffset_'$summitoffsetval'/Filtered_Peaks_PvalThr_Summit_Offset_'$summitoffsetval'bp.bed'
+
+		$RPackageExec ../Imp_Scripts/Motif_HOMER.R --MotifFindExec $HOMERMotifExec --RefGenome $RefGenome --PeakFile $inpPeakFile --OutDir $MotifOutDir --PValThr $pvalThr --SummitOffset $summitoffsetval
+
+		# call HINT-ATAC specific motif footprinting
+		$RPackageExec ../Imp_Scripts/Footprint_HINT_ATAC.R --MotifPeak $motifPeakFile --AllRead $ShiftedBAMFile --NFRRead $File_NFR --NFRANDNuclRead $File_Nucleosome_Merge --OutDir $MotifOutDir'/Motif_Peaks_PvalThr_'$pvalThr'_SummitOffset_'$summitoffsetval'/Footprint_HINT_ATAC' --RefGenome $RefGenome --PE $paired_read
+
+	done
+done
+
+#================================
+# plot the TSS enrichment of peaks and its surrounding regions
+# using deeptools utility
+# currently commented - sourya
+#================================
+TSSEnrichmentOutDir=$OutDir'/TSS_Enrichment_Peaks'
+mkdir -p $TSSEnrichmentOutDir
+
+for offsetval in 5000 1000; do
+# for offsetval in 1000; do
+	for FDRpct in 5 1; do
+		if [[ $nctrl -gt 0 ]]; then	
+			inpPeakFile=$OutDir'/MACS2_Ext_Tag_with_Control/'$PREFIX'.macs2_peaks.narrowPeak_Q0.0'$FDRpct'filt'
+			CurrOutDir=$TSSEnrichmentOutDir'/MACS2_Ext_Tag_with_Control/macs2_narrowPeak_Q0.0'$FDRpct'filt_Offset_'$offsetval
+		else
+			inpPeakFile=$OutDir'/MACS2_Ext_Tag_No_Control/'$PREFIX'.macs2_peaks.narrowPeak_Q0.0'$FDRpct'filt'
+			CurrOutDir=$TSSEnrichmentOutDir'/MACS2_Ext_Tag_No_Control/macs2_narrowPeak_Q0.0'$FDRpct'filt_Offset_'$offsetval
+		fi
+		# check if TSS file is provided as an input
+		# Note: it should be separate from the reference gene annotation file
+		# first three columns should have the TSS information
+		if [[ ! -z $TSSFile && -f $TSSFile ]]; then	
+			$RPackageExec ../Imp_Scripts/Peak_Enrichment.R --BigWigFile $BigWig_outdir1'/'$PREFIX'_NormCov.bw' --Label $PREFIX --DeepToolsDir $DeepToolsDir --TSSFile $TSSFile --PeakFile $inpPeakFile --OutDir $CurrOutDir --Offset $offsetval
+		else 
+			$RPackageExec ../Imp_Scripts/Peak_Enrichment.R --BigWigFile $BigWig_outdir1'/'$PREFIX'_NormCov.bw' --Label $PREFIX --DeepToolsDir $DeepToolsDir --PeakFile $inpPeakFile --OutDir $CurrOutDir --Offset $offsetval
+		fi
+	done
+done
+
+
+
+
+
+
+
+# # #================================
+# # # here analyze the MACS2 output 
+# # # from the default command
+# # # and the extsize command
+# # # compute peak overlap statistics
+# # #================================
+
+# # PeakOverlapOutDir=$OutDir'/Peak_Overlap_Statistics'
+# # mkdir -p $PeakOverlapOutDir
+
+# # if [ ! -f $PeakOverlapOutDir'/Peak_Overlap.txt' ]; then
+# # 	/home/sourya/R-3.4.3/bin/Rscript $PeakOverlapCode --FileList $MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt':$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt' --Labels 'MACS2_Default':'MACS2_Ext' --OutPrefix $PeakOverlapOutDir'/Peak_Ov' --Dump
+# # fi
+
+# # #=============================
+# # # now we check for individual peaks (detected from MACS2)
+# # # the number of reads mapped into this peak
+# # # also we measure the peak length
+# # #=============================
+# # python ../src/peak_distribution.py -I $MACS2_outdir2 $PREFIX'.macs2_peaks.broadPeak' -R $bowtie2_BAM_prefix'.rmdup.MAPQ'$MAPQ_THR'.bam'
+# # python ../src/peak_distribution.py -I $MACS2_outdir1 $PREFIX'.macs2_peaks.narrowPeak' -R $bowtie2_BAM_prefix'.rmdup.MAPQ'$MAPQ_THR'.bam'
+
+# #==============
+# # remove temporary files
+# if [[ -f $curr_tagalign_file ]]; then
+# 	rm $curr_tagalign_file
+# fi
+
+# if [[ -f $temp_NRF_PBC_file ]]; then
+# 	rm $temp_NRF_PBC_file
+# fi
+
+# if [[ -f $Shifted_TagAlign_File ]]; then
+# 	rm $Shifted_TagAlign_File
+# fi
 
 #----------------------------------
 # important - sourya
