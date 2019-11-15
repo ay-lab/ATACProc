@@ -21,18 +21,18 @@ ATACProc is a pipeline to analyze ATAC-seq data. Currently datasets involving on
 
 5) Irreproducible Discovery Rate (IDR) analysis (https://github.com/nboley/idr) between a set of peak calls or even a set of input alignment (BAM) files (in which case, peaks are estimated first) corresponding to a set of biological or technical ATAC-seq replicates. 
 
-6) **New in version 2.0** Support discarding reads falling in blacklisted genomic regions
+6) **New in version 2.0:** Support discarding reads falling in blacklisted genomic regions
 
-7) *New in version 2.0* Support extracting nucleosome free reads (NFR), one or more nucleosome containing regions (denoted as +1M), for TF footprinting analysis.
+7) **New in version 2.0:** Support extracting nucleosome free reads (NFR), one or more nucleosome containing regions (denoted as +1M), for TF footprinting analysis.
 
-8) *New in version 2.0* Compatibility to the package ATAQV (https://github.com/ParkerLab/ataqv) for generating summary statistics across a set of samples.
+8) **New in version 2.0:** Compatibility to the package ATAQV (https://github.com/ParkerLab/ataqv) for generating summary statistics across a set of samples.
 
 #######################
 
 Release notes
 -----------------
 
-*Version 2.0 - November 2019:*
+**Version 2.0 - November 2019**
 
 1) Included TF footprinting, optional discarding of blacklisted genomic regions, motif analysis
 
@@ -144,9 +144,9 @@ Following packages / libraries should be installed before running this pipeline:
 		python setupLogoData.py --all
 
 
-*User should include the PATH of above mentioned libraries / packages inside their SYSTEM PATH variable. Alternatively, installation PATHS for some of these packages are to be mentioned in a separate configuration file (described below)*
+**User should include the PATH of above mentioned libraries / packages inside their SYSTEM PATH variable. Alternatively, installation PATHS for some of these packages are to be mentioned in a separate configuration file (described below)**
 
-*Following packages / libraries are to be installed for executing IDR code*
+**Following packages / libraries are to be installed for executing IDR code**
 
 9) sambamba (we have used version 0.6.7) <http://lomereiter.github.io/sambamba/>
 
@@ -168,60 +168,54 @@ Options:
 Mandatory parameters:
 
 	-C  ConfigFile		    
-	             Configuration file to be separately provided. Mandatory parameter. Current package includes four sample configuration files named "configfile_*" corresponding to the reference genomes hg19, hg38, mm9 and mm10. Detailed description of the entries in this configuration file are mentioned later.
+         	Configuration file to be separately provided. Mandatory parameter. Current package includes four sample configuration files named "configfile_*" corresponding to the reference genomes hg19, hg38, mm9 and mm10. Detailed description of the entries in this configuration file are mentioned later.
 	              
 	-f  FASTQ1          
-	            Read 1 (or forward strand) of paired-end sequencing data  [.fq|.gz|.bz2]. 
-				Or, even an aligned genome (.bam file; single or paired end alignment) can be provided.
+        	Read 1 (or forward strand) of paired-end sequencing data  [.fq|.gz|.bz2]. Or, even an aligned genome (.bam file; single or paired end alignment) can be provided.
 	        
 	-r  FASTQ2          
-	            R2 of pair-end sequencing data [.fq|.gz|.bz2]. If not provided, and the -f parameter 
-	            is not a BAM file, the input is assumed to be single ended.
+            R2 of pair-end sequencing data [.fq|.gz|.bz2]. If not provided, and the -f parameter is not a BAM file, the input is assumed to be single ended.
 
 	-n  PREFIX           
-	            Prefix string of output files. For example, -n "TEST" means that the 
-	            output filenames start with the string "TEST". Generally, sample names with run ID, lane information, etc. can be used as a prefix string.
+            Prefix string of output files. For example, -n "TEST" means that the output filenames start with the string "TEST". Generally, sample names with run ID, lane information, etc. can be used as a prefix string.
 
 	-g  BOWTIE2_GENOME   
-	            Bowtie2 indexed reference genome. Basically, the folder containing bwt2 indices (corresponding to the reference genome) are to be provided. 
-	            Mandatory parameter if the user provides fastq files as input (-f and -r options).
-				If user provides .bam files as an input (-f option) then this field is optional.				
+            Bowtie2 indexed reference genome. Basically, the folder containing bwt2 indices (corresponding to the reference genome) are to be provided. Mandatory parameter if the user provides fastq files as input (-f and -r options). If user provides .bam files as an input (-f option) then this field is optional.
 
 	-d  OutDir 			  
-	            Output directory to store the results for the current sample.
+            Output directory to store the results for the current sample.
 
 	-c  CONTROLBAM		 
-	         	Control file(s) used for peak calling using MACS2. One or more alignment files can be provided to be used as a control. It may not be specified at all, in which case MACS2 operates without any control. Control file can be either in *BAM* or in *tagalign.gz* format (the standalone script *bin/TagAlign.sh* in this repository converts BAM file to tagalign.gz format). For multiple control files, they all are required to be of the same format (i.e. either all BAM or all tagalign.gz). Example: -c control1.bam -c control2.bam puts two control files for using in MACS2.
+         	Control file(s) used for peak calling using MACS2. One or more alignment files can be provided to be used as a control. It may not be specified at all, in which case MACS2 operates without any control. Control file can be either in *BAM* or in *tagalign.gz* format (the standalone script *bin/TagAlign.sh* in this repository converts BAM file to tagalign.gz format). For multiple control files, they all are required to be of the same format (i.e. either all BAM or all tagalign.gz). Example: -c control1.bam -c control2.bam puts two control files for using in MACS2.
 		
 	-w 	BigWigGenome	 
-				Reference genome as a string. Allowed values are hg19 (default), hg38, mm9 and mm10. If -g option is enabled (i.e. the Bowtie2 index genome is provided), this field is optional. Otherwise, mandatory parameter.				
+			Reference genome as a string. Allowed values are hg19 (default), hg38, mm9 and mm10. If -g option is enabled (i.e. the Bowtie2 index genome is provided), this field is optional. Otherwise, mandatory parameter.				
 		
 	-D  DEBUG_TXT		 
-				Binary variable. If 1 (recommended), dumps QC statistics. For a set of samples, those QC statistics can be used later to profile QC variation among different samples.				
+			Binary variable. If 1 (recommended), dumps QC statistics. For a set of samples, those QC statistics can be used later to profile QC variation among different samples.				
 		
 	-q  MAPQ_THR		 
-				Mapping quality threshold for bowtie2 alignment. Aligned reads with quality below this threshold are discarded. Default = 30. 
+			Mapping quality threshold for bowtie2 alignment. Aligned reads with quality below this threshold are discarded. Default = 30. 
 		
 	-p  PEAKCALLGENOMESIZE 
-				genome size parameter for MACS2 peak calling ("hs", "mm", "ce", "dm": default "hs")
+			genome size parameter for MACS2 peak calling ("hs", "mm", "ce", "dm": default "hs")
 
 Optional parameters:
 
 	-O 	Overwrite		 
-				Binary variable. If 1, overwrites the existing files (if any). Default = 0.
+			Binary variable. If 1, overwrites the existing files (if any). Default = 0.
 						 
 	-t  NUMTHREADS              
-				Number of sorting, Bowtie2 mapping THREADS [Default = 1]. If multiprocessing core is available, user should specify values > 1 such as 4 or 8, for faster execution of Bowtie2.
+			Number of sorting, Bowtie2 mapping THREADS [Default = 1]. If multiprocessing core is available, user should specify values > 1 such as 4 or 8, for faster execution of Bowtie2.
 		
 	-m  MAX_MEM          
-				Set max memory used for PICARD duplication removal [Default = 8G].
+			Set max memory used for PICARD duplication removal [Default = 8G].
 		
 	-a  ALIGNVALIDMAX	 
-				Set the number of (max) valid alignments which will be searched [Default = 4] 
-				for Bowtie2.
+			Set the number of (max) valid alignments which will be searched [Default = 4] for Bowtie2.
 		
 	-l  MAXFRAGLEN 		 
-				Set the maximum fragment length to be used for Bowtie2 alignment [Default = 2000]
+			Set the maximum fragment length to be used for Bowtie2 alignment [Default = 2000]
 			
 
 Entries in the configuration file (first parameter)
@@ -338,19 +332,19 @@ Within the folder *OutDir* (specified by the configuration option -d) following 
 		f1-7: ${PREFIX}.align.sort.MAPQ${MAPQ_THR}.picard_metrics.txt
 			PICARD metrics log file corresponding to the duplicate removal operation.
 		f1-8: ${PREFIX}.align.sort.MAPQ${MAPQ_THR}_TN5_Shift.bam
-			*New in version 2.0* De-duplicated reads with shifted forward (+4bp) and reverse strands (-5bp) by Tn5 transposase. Used to extract the nucleosome free and nucleosome containing regions.
+			**New in version 2.0:** De-duplicated reads with shifted forward (+4bp) and reverse strands (-5bp) by Tn5 transposase. Used to extract the nucleosome free and nucleosome containing regions.
 		f1-9: ${PREFIX}.align.sort.MAPQ${MAPQ_THR}_TN5_Shift.bed
-			*New in version 2.0* Bed converted f7, used for MACS2 peak calling.
+			**New in version 2.0:** Bed converted f7, used for MACS2 peak calling.
 		f1-10: NucleosomeFree.bam
-			*New in version 2.0* Alignment with nucleosome free regions (NFR)
+			**New in version 2.0:** Alignment with nucleosome free regions (NFR)
 		f1-11: mononucleosome.bam
-			*New in version 2.0* Alignment with mononucleosome fragments
+			**New in version 2.0:** Alignment with mononucleosome fragments
 		f1-12: dinucleosome.bam
-			*New in version 2.0* Alignment with dinucleosome fragments
+			**New in version 2.0:** Alignment with dinucleosome fragments
 		f1-13: trinucleosome.bam
-			*New in version 2.0* Alignment with trinucleosome fragments
+			**New in version 2.0:** Alignment with trinucleosome fragments
 		f1-14: Merged_nucleosome.bam
-			*New in version 2.0* File containing fragments of nucleosome free and one or more nucleosomes (denoted as NFR +1M, in the HINT-ATAC genome biology paper). Generated by merging files f1-10 to f1-13.
+			**New in version 2.0:** File containing fragments of nucleosome free and one or more nucleosomes (denoted as NFR +1M, in the HINT-ATAC genome biology paper). Generated by merging files f1-10 to f1-13.
 
 	F2: Out_BigWig
 		f2-1: ${PREFIX}.bw 
@@ -394,10 +388,10 @@ Within the folder *OutDir* (specified by the configuration option -d) following 
 		Read count statistics.
 
 	F10: QC_ataqv_ParkerLab_Test
-		*New in version 2.0* Folder containing the summary .json files generated by the package ATAQV, which for diferent samples, can be combined to put a summary statistic and displayed in a Web browser.
+		**New in version 2.0:** Folder containing the summary .json files generated by the package ATAQV, which for diferent samples, can be combined to put a summary statistic and displayed in a Web browser.
 
 	F11: TSS_Enrichment_Peaks
-		*New in version 2.0* Processes the narrow peaks from the folder F4, and computes the TSS enrichment of these peaks. The underlying file structure is:
+		**New in version 2.0:** Processes the narrow peaks from the folder F4, and computes the TSS enrichment of these peaks. The underlying file structure is:
 
 		MACS2_Ext_*${CONTROLSTR}/macs2_narrowPeak_Q${FDRTHR}filt_Offset_${OFFSETVAL}/${PEAKTYPE}/*.pdf
 
@@ -409,7 +403,7 @@ Within the folder *OutDir* (specified by the configuration option -d) following 
 
 
 	F12: Motif_MACS2_Ext_*${CONTROLSTR}_narrowPeak_Q${FDRTHR}filt
-		*New in version 2.0* TF footorinting analysis corresponding to the ChIP-seq peaks stored in F4. Here, ${CONTROLSTR} is either "*_No_Control" or "*_With_Control", depending on the use of control BAM file in inferring the peaks. ${FDRTHR} is either 0.01 or 0.05.
+		**New in version 2.0:** TF footorinting analysis corresponding to the ChIP-seq peaks stored in F4. Here, ${CONTROLSTR} is either "*_No_Control" or "*_With_Control", depending on the use of control BAM file in inferring the peaks. ${FDRTHR} is either 0.01 or 0.05.
 
 		The principle is to extract the peak summits and surroundings (by some bp, defined as an offset) and compute the TF footprinting regions and underlying motifs within these regions.
 
