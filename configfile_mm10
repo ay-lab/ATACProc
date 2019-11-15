@@ -1,5 +1,5 @@
 #==================================== 
-# Sample Configuration file for running the ATAC-seq pipeline
+# Configuration file for running the ATAC-seq pipeline
 # Contains locations of executables and a few genome specific files
 # required to execute the pipeline
 #====================================  
@@ -33,22 +33,22 @@ BroadPeakASFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/broadPeak.a
 # example: for reference genome hg38, hg38.chrom.sizes
 # example: for reference genome mm9, chrom_mm9.sizes
 # example: for reference genome mm10, mm10.chrom.sizes
-RefChrSizeFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/hg38.chrom.sizes
+RefChrSizeFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/mm10.chrom.sizes
 
 # files containing reference chromosome fasta sequence
 # example: hg19.fa, mm9.fa, hg38.fa and mm10.fa
-RefChrFastaFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/Complete_Genome/hg38/hg38.fa
+RefChrFastaFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/Complete_Genome/mm10/mm10.fa
 
 # files containing reference UCSC annotation (.gtf format) corresponding to the reference Chromosome
 # applied as an input to HOMER
-RefChrAnnotFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/Annotation/hg38/hg38.gtf
+RefChrAnnotFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/Annotation/mm10/mm10.gtf
 
 # file containing blacklisted regions corresponding to this reference genome hg38
 # can be downloaded from the link 
 # https://github.com/Boyle-Lab/Blacklist/tree/master/lists (v2)
 # its OK if this parameter is void, but we recommend to provide if the file is available
 # file can be gzipped or normal text format 
-BlackListFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/BlackListed_Regions/hg38-blacklist.v2.bed
+BlackListFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/BlackListed_Regions/mm10-blacklist.v2.bed
 
 # executable of ataqv package (https://github.com/ParkerLab/ataqv)
 # download the GitHub release (.tar.gz) file, extract it and provide the ataqv executable path here
@@ -56,7 +56,7 @@ ATAQVPath=/home/sourya/packages/ataqv/ataqv-1.0.0/bin/ataqv
 
 # we have to also include the TSS file, but have to specify that the user needs to convert their GTF File (gene annotation file) in the TSS format
 # so that first two fields of TSS file includes the chromosome name and the TSS coordinate
-TSSFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/Annotation/hg38/hg38_TSS.gtf
+TSSFile=/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/Annotation/mm10/mm10_TSS.gtf
 
 
 

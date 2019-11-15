@@ -1,5 +1,5 @@
 #==================================== 
-# Sample Configuration file for running the ATAC-seq pipeline
+# Configuration file for running the ATAC-seq pipeline
 # Contains locations of executables and a few genome specific files
 # required to execute the pipeline
 #====================================  
