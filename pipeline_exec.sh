@@ -19,7 +19,7 @@ inpfile2=$dirdata'fastafiles/001_R2.fastq.gz'
 outdir=$dirdata'Sample_TEST_ATAC'
 prefix='001'
 
-`pwd`/bin/pipeline.sh -f $inpfile1 -r $inpfile2 -C `pwd`'/configfile' -n $prefix -g $genome -d $outdir -t 8 -m "16G" -q 20 -D 1 -O 0
+`pwd`/bin/pipeline.sh -f $inpfile1 -r $inpfile2 -C `pwd`'/configfile_hg19' -n $prefix -g $genome -d $outdir -t 8 -m "16G" -q 20 -D 1 -O 0
 
 #=================
 # script 2 - when fastq files of single end end read are provided as the input
@@ -31,7 +31,7 @@ inpfile=$dirdata'merged_inp.fastq.gz'
 outdir=$dirdata'Sample_TEST_ATAC'
 prefix='002'
 
-`pwd`/bin/pipeline.sh -f $inpfile -C `pwd`'/configfile' -n $prefix -g $genome -d $outdir -t 8 -m "16G" -q 20 -D 0 -O 0
+`pwd`/bin/pipeline.sh -f $inpfile -C `pwd`'/configfile_hg19' -n $prefix -g $genome -d $outdir -t 8 -m "16G" -q 20 -D 0 -O 0
 
 #=================
 # script 3 - when a BAM file is provided as the input
@@ -45,6 +45,6 @@ inpfile=$dirdata'inp.bam'
 outdir=$dirdata'Sample_TEST_ATAC'
 prefix='003'
 
-`pwd`/bin/pipeline.sh -f $inpfile -C `pwd`'/configfile' -n $prefix -d $outdir -t 8 -m "16G" -q 20 -D 1 -O 0 -w "hg19"
+`pwd`/bin/pipeline.sh -f $inpfile -C `pwd`'/configfile_hg19' -n $prefix -d $outdir -t 8 -m "16G" -q 20 -D 1 -O 0 -w "hg19"
 
 
