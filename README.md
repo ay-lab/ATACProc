@@ -21,7 +21,7 @@ ATACProc is a pipeline to analyze ATAC-seq data. Currently datasets involving on
 
 5) Irreproducible Discovery Rate (IDR) analysis (https://github.com/nboley/idr) between a set of peak calls or even a set of input alignment (BAM) files (in which case, peaks are estimated first) corresponding to a set of biological or technical ATAC-seq replicates. 
 
-6) *New in version 2.0* Support discarding reads falling in blacklisted genomic regions
+6) **New in version 2.0** Support discarding reads falling in blacklisted genomic regions
 
 7) *New in version 2.0* Support extracting nucleosome free reads (NFR), one or more nucleosome containing regions (denoted as +1M), for TF footprinting analysis.
 
