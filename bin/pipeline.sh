@@ -1318,8 +1318,8 @@ for FDRpct in 5; do
 		MotifOutDir=$OutDir'/Motif_MACS2_Ext_Tag_No_Control_narrowPeak_Q0.0'$FDRpct'filt'
 	fi
 
-	for summitoffsetval in 500 200; do
-	# for summitoffsetval in 200; do
+	#for summitoffsetval in 500 200; do
+	for summitoffsetval in 200; do
 		
 		motifPeakFile=$MotifOutDir'/Motif_Complete_Peaks_SummitOffset_'$summitoffsetval'/Peaks_Summit_Offset_'$summitoffsetval'bp.bed'
 
