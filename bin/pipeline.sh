@@ -693,7 +693,7 @@ fi
 
 # now remove any PCR duplicates using Picard tool
 if [[ ! -f $bowtie2_BAM_prefix'.rmdup.bam' || $Overwrite == 1 ]]; then
-	java -Xmx$MAX_MEM -jar $picard_exec MarkDuplicates INPUT $bowtie2_BAM_prefix'.bam' OUTPUT $bowtie2_BAM_prefix'.rmdup.bam' ASSUME_SORTED true REMOVE_DUPLICATES true VALIDATION_STRINGENCY LENIENT METRICS_FILE $bowtie2_BAM_prefix'.picard_metrics.txt'
+	java -Xmx$MAX_MEM -jar $picard_exec MarkDuplicates INPUT=$bowtie2_BAM_prefix'.bam' OUTPUT=$bowtie2_BAM_prefix'.rmdup.bam' ASSUME_SORTED=true REMOVE_DUPLICATES=true VALIDATION_STRINGENCY=LENIENT METRICS_FILE=$bowtie2_BAM_prefix'.picard_metrics.txt'
 fi
 
 if [[ ! -f $bowtie2_BAM_prefix'.rmdup.bam.bai' ]]; then
