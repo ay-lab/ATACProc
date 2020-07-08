@@ -32,6 +32,11 @@ ATACProc is a pipeline to analyze ATAC-seq data. Currently datasets involving on
 Release notes
 -----------------
 
+**Version 2.1 - July 2020**
+
+Minor change of picard duplicate removal syntax, according to the picard tool version 2.8.14 
+We recommend using this (or later) versions
+
 **Version 2.0 - November 2019**
 
 1) Included TF footprinting, optional discarding of blacklisted genomic regions, motif analysis
@@ -108,7 +113,7 @@ Following packages / libraries should be installed before running this pipeline:
 
 4) samtools (we have used version 1.6) <http://samtools.sourceforge.net/>
 
-5) PICARD tools (we have used 2.7.1 version) <https://broadinstitute.github.io/picard/>
+5) PICARD tools (we have used 2.8.14 version now; previously we were using version 2.7.1) <https://broadinstitute.github.io/picard/>
 
 6) Utilities "bedGraphToBigWig", "bedSort", "bigBedToBed", "hubCheck" and "fetchChromSizes" - to be downloaded from UCSC repository <http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/>
 
