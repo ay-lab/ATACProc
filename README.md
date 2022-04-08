@@ -32,6 +32,18 @@ ATACProc is a pipeline to analyze ATAC-seq data. Currently datasets involving on
 Release notes
 -----------------
 
+**Version 2.2 - April 2022**
+
+Added -F option - corresponds to using different types of reads for footprinting. 
+
+Default = 1, means footprinting with nucleosome free reads (NFR) will be done.
+
+Best for standard ATAC-seq protocols (Li et al. Genome Biology, 2019)
+
+If -F option is 2, footprinting with nucleosome reads will also be separately computed in addition to the NFR based footprints (two different footprinting outputs).
+
+If -F option is 3, footprinting with all the reads will also be separately computed in addition to the NFR based and nucleosome read based footprints (three different footprinting outputs).
+
 **Version 2.1 - July 2020**
 
 Minor change of picard duplicate removal syntax, according to the picard tool version 2.8.14 
