@@ -193,23 +193,29 @@ Mandatory parameters:
 	-c  CONTROLBAM		 
          	Control file(s) used for peak calling using MACS2. One or more alignment files can be provided to be used as a control. It may not be specified at all, in which case MACS2 operates without any control. Control file can be either in *BAM* or in *tagalign.gz* format (the standalone script *bin/TagAlign.sh* in this repository converts BAM file to tagalign.gz format). For multiple control files, they all are required to be of the same format (i.e. either all BAM or all tagalign.gz). Example: -c control1.bam -c control2.bam puts two control files for using in MACS2.
 		
-	-w 	BigWigGenome	 
+	-w BigWigGenome	 
 			Reference genome as a string. Allowed values are hg19 (default), hg38, mm9 and mm10. If -g option is enabled (i.e. the Bowtie2 index genome is provided), this field is optional. Otherwise, mandatory parameter.				
 		
 	-D  DEBUG_TXT		 
 			Binary variable. If 1 (recommended), dumps QC statistics. For a set of samples, those QC statistics can be used later to profile QC variation among different samples.				
 		
-	-q  MAPQ_THR		 
-			Mapping quality threshold for bowtie2 alignment. Aligned reads with quality below this threshold are discarded. Default = 30. 
-		
-	-p  PEAKCALLGENOMESIZE 
-			genome size parameter for MACS2 peak calling ("hs", "mm", "ce", "dm": default "hs")
-
-Optional parameters:
-
 	-O 	Overwrite		 
 			Binary variable. If 1, overwrites the existing files (if any). Default = 0.
-						 
+
+	-F 	Footprint 	 	
+			This flag specifies the footprinting option. Value can be 1 (default), 2, or 3
+			1: footoprint using the nucleosome free reads (NFR) will be computed. 
+			   Default setting. Best for default ATAC-seq protocol (check Li et. al. Genome Biology 2019)
+			2: footoprint using the nucleosome free reads (NFR) and also the nucleosome containing reads (NFR + 1N + 2N + 3N ...) 
+			   will be computed (two different footprint outputs - time consuming). 
+			   Best for Omni-ATAC protocol (check Li et. al. Genome Biology 2019)
+ 			3: footoprint using NFR, NFR with nucleosome reads, and all reads will be computed 
+			   (three different footprint outputs - highly time consuming).	
+			   
+Optional parameters:
+	-q  MAPQ_THR		 
+			Mapping quality threshold for bowtie2 alignment. Aligned reads with quality below this threshold are discarded. Default = 30. 
+		 
 	-t  NUMTHREADS              
 			Number of sorting, Bowtie2 mapping THREADS [Default = 1]. If multiprocessing core is available, user should specify values > 1 such as 4 or 8, for faster execution of Bowtie2.
 		
@@ -307,11 +313,11 @@ And is to be filled with the following entries:
 	
 	The last parameter, *TSSFile*, needs a special mention. User can apply the following awk script to the reference genome annotation file (indicated in the parameter *RefChrAnnotFile*) to produce a file with TSS information.
 
-	Assuming user has downloaded the reference genome specific gene annotation file using one of the ftp links provided above, when the reference genome is either hg19, hg38 or mm10, user should apply the following awk script to obtain a TSS file (input_TSS.gtf) from the gene annotation file (input.gtf) :
+	Assuming user has downloaded the reference genome specific gene annotation file using one of the ftp links provided above, when the reference genome is either hg19, hg38 or mm10, user can apply the following awk script to obtain a TSS file (input_TSS.gtf) from the gene annotation file (input.gtf) (Note: it is always best to check the .gtf file format) :
 
 		awk -F'[\t]' '{if ((substr($1,1,1)!="#") && ($3=="transcript")) {if ($7=="+") {print "chr"$1"\t"$4"\t"$4"\t"$3"\t"$4"\t"$5"\t"$7"\t"$9} else {print "chr"$1"\t"$5"\t"$5"\t"$3"\t"$4"\t"$5"\t"$7"\t"$9}}}' input.gtf > input_TSS.gtf
 
-	When the reference genome is mm9, user should apply the following script:
+	When the reference genome is mm9, user can apply the following script (it is best to check the .gtf file format):
 
 		awk -F'[\t]' '{if ((substr($1,1,1)!="#") && ($3=="exon")) {if ($7=="+") {print "chr"$1"\t"$4"\t"$4"\t"$3"\t"$4"\t"$5"\t"$7"\t"$9} else {print "chr"$1"\t"$5"\t"$5"\t"$3"\t"$4"\t"$5"\t"$7"\t"$9}}}' mm9.gtf > mm9_TSS.gtf
 
