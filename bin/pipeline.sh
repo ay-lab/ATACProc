@@ -59,6 +59,11 @@ Options:
 	-O 	Overwrite		 this boolean option signifies whether existing output 
 						 files would be overwritten (1) or not (0).
 						 Default = 0
+ 	-F 	Footprint 	 	This flag specifies the footprinting option.
+ 										Value can be 1 (default), 2, or 3
+ 										1: footoprint using the nucleosome free reads (NFR) will be computed. Default setting. Best for default ATAC-seq protocol (check Li et. al. Genome Biology 2019)
+ 										2: footoprint using the nucleosome free reads (NFR) and also the nucleosome containing reads (NFR + 1N + 2N + 3N ...) will be computed (two different footprint outputs - time consuming). Best for Omni-ATAC protocol (check Li et. al. Genome Biology 2019)
+ 										3: footoprint using NFR, NFR with nucleosome reads, and all reads will be computed (three different footprint outputs - highly time consuming).
   -- optional:
 	-t  INT              Set number of sorting, Bowtie2 mapping threads [8].
 	-m  MAX_MEM          Set max memory of duplication removal [8G].
@@ -135,6 +140,9 @@ Overwrite=0
 # default file name corresponding to the blacklisted regions
 BlackListFile=""
 
+## default mode of footprinting
+FootprintOption=1
+
 #============================
 # reference packages / executables
 #============================
@@ -153,33 +161,9 @@ TagAlignExec='TagAlign.sh'
 # executable to convert the sorted bam file to the bigwig format
 BigWigCreateExec='bam_to_bigwig.sh'
 
-# PeakOverlapCode='/home/sourya/proj/Analysis_Scripts_Util/Peak_Intersect.r'
-
-#====================
-# utilities to convert the MACS2 detected peak in to big bed format
-# useful for displaying in UCSC genome browser
-#====================
-
-# # file (SQL) required to convert the narrowPeak file to the bigBed format
-# NarrowPeakASFile='/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/narrowPeak.as'
-# BigNarrowPeakASFile='/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/bigNarrowPeak.as'
-# BroadPeakASFile='/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/broadPeak.as'
-
-# # chromosome size information of the reference hg19 genome
-# Refhg19ChrSize='/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/chrom_hg19.sizes'
-
-# # chromosome size information of the reference hg38 genome
-# Refhg38ChrSize='/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/hg38.chrom.sizes'
-
-# # chromosome size information of the reference mm9 genome
-# Refmm9ChrSize='/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/chrom_mm9.sizes'
-
-# # chromosome size information of the reference mm10 genome
-# Refmm10ChrSize='/mnt/BioAdHoc/Groups/vd-vijay/sourya/genomes/chrsize/mm10.chrom.sizes'
-
 #============================
 
-while getopts "C:f:r:n:g:t:m:d:a:l:c:q:w:D:O:" opt;
+while getopts "C:f:r:n:g:t:m:d:a:l:c:q:w:D:O:F:" opt;
 do
 	case "$opt" in
 		C) ConfigFile=$OPTARG;;		
@@ -197,6 +181,7 @@ do
 		w) BigWigGenome=$OPTARG;;
 		D) DEBUG_TXT=$OPTARG;;
 		O) Overwrite=$OPTARG;;
+		F) FootprintOption=$OPTARG;;
 		\?) usage
 			echo "error: unrecognized option -$OPTARG";
 			exit 1
@@ -263,9 +248,6 @@ do
 	if [[ -n $param ]]; then
 		if [[ $param != \#* ]]; then
 			echo -e "Content of $param is $paramval"
-			# if [ $param == "sppexec" ]; then
-			# 	sppexec=$paramval
-			# fi
 			if [ $param == "picardexec" ]; then
 				picard_exec=$paramval
 			fi
@@ -275,9 +257,6 @@ do
 			if [ $param == "DeepToolsDir" ]; then
 				DeepToolsDir=$paramval
 			fi		
-			# if [ $param == "RPackageExec" ]; then
-			# 	RPackageExec=$paramval
-			# fi
 			if [ $param == "NarrowPeakASFile" ]; then
 				NarrowPeakASFile=$paramval
 			fi			
@@ -309,11 +288,6 @@ do
 	fi
 done < $ConfigFile
 
-# if [[ -z sppexec ]]; then
-# 	echo 'SPP executable path (from the package phantompeakqualtools by Anshul Kundaje et al.) is not provided - check the configuration file - quit !! '
-# 	exit 1
-# fi
-
 if [[ -z $picard_exec ]]; then
 	echo 'Picard tool executable path is not provided - check the configuration file - quit !! '
 	exit 1
@@ -328,11 +302,6 @@ if [[ -z $DeepToolsDir ]]; then
 	echo 'Deeptools executable path is not provided - check the configuration file - quit !! '
 	exit 1
 fi
-
-# if [[ -z $RPackageExec ]]; then
-# 	echo 'R executable is not provided - check the configuration file - quit !! '
-# 	exit 1
-# fi
 
 if [[ -z $NarrowPeakASFile ]]; then
 	echo 'File to convert narrowPeak to BigBed (NarrowPeakASFile) is not provided - check the configuration file - quit !! '
@@ -505,20 +474,6 @@ if [ $fastq_input == 1 ]; then
 			# also mention the output directory to store these files
 			$PythonExec ../src/trim_adapters.py -a $FASTQ1 -b $FASTQ2 -d $trim_adapter_dir
 
-			# comment - sourya
-			# trim_file1=$file1'.trim.fastq'
-			# trim_file2=$file2'.trim.fastq'
-			# gzip $trim_file1
-			# gzip $trim_file2
-			# trim_file1=$trim_file1'.gz'
-			# trim_file2=$trim_file2'.gz'
-
-			# mv $trim_file1 $trim_adapter_dir
-			# mv $trim_file2 $trim_adapter_dir
-			# trim_file1=$trim_adapter_dir$trim_file1
-			# trim_file2=$trim_adapter_dir$trim_file2
-
-			# add - sourya
 			trim_file1=$trim_adapter_dir$file1'.trim.fastq'
 			trim_file2=$trim_adapter_dir$file2'.trim.fastq'
 			gzip $trim_file1
@@ -684,7 +639,7 @@ fi
 # index the sorted file
 # provided the index file either does not exist
 # or has a modification time earlier than the bam file itself
-if [[ ! -f $bowtie2_BAM_prefix'.bam.bai' ]]; then
+if [[ ! -f $bowtie2_BAM_prefix'.bam.bai' || $Overwrite == 1 ]]; then
 	samtools index $bowtie2_BAM_prefix'.bam'
 elif [[ $bowtie2_BAM_prefix'.bam.bai' -ot $bowtie2_BAM_prefix'.bam' ]]; then
 	# here -ot corresponds to "older than"
@@ -696,7 +651,7 @@ if [[ ! -f $bowtie2_BAM_prefix'.rmdup.bam' || $Overwrite == 1 ]]; then
 	java -Xmx$MAX_MEM -jar $picard_exec MarkDuplicates INPUT=$bowtie2_BAM_prefix'.bam' OUTPUT=$bowtie2_BAM_prefix'.rmdup.bam' ASSUME_SORTED=true REMOVE_DUPLICATES=true VALIDATION_STRINGENCY=LENIENT METRICS_FILE=$bowtie2_BAM_prefix'.picard_metrics.txt'
 fi
 
-if [[ ! -f $bowtie2_BAM_prefix'.rmdup.bam.bai' ]]; then
+if [[ ! -f $bowtie2_BAM_prefix'.rmdup.bam.bai' || $Overwrite == 1 ]]; then
 	samtools index $bowtie2_BAM_prefix'.rmdup.bam'
 fi
 
@@ -729,35 +684,13 @@ if [ $paired_read == 1 ]; then
 	picard_insert_histfile=$bowtie2_outdir$PREFIX'.Picard_insert_size_histogram.MAPQ'$MAPQ_THR'.pdf'
 
 	# picard tool based histogram
-	if [ ! -f $picard_insert_metricfile ] || [ ! -f $picard_insert_histfile ]; then 
+	if [[ ! -f $picard_insert_metricfile || ! -f $picard_insert_histfile || $Overwrite == 1 ]]; then 
 		java -Xmx$MAX_MEM -jar $picard_exec CollectInsertSizeMetrics I=$bowtie2_BAM_prefix'.rmdup.bam' O=$picard_insert_metricfile H=$picard_insert_histfile M=0.5
 		# plotting the ATAC seq representative plot
 		# normalized read count vs bp distance
 		$PythonExec ../src/PlotSample.py -I $picard_insert_metricfile
 	fi
 fi
-
-# #=========================
-# # add - sourya
-# # check if there is any blacklist file corresponding to the current reference genome is provided
-# # in such a case, discard the reads which overlap with the blacklisted region
-# #=========================
-# # if blacklisted genome region file is provided
-# if [[ ! -z $BlackListFile && -f $BlackListFile ]]; then
-# 	if [ ! -f $bowtie2_BAM_prefix'_possible_overlap_blacklist.bam' ]; then
-# 		# -v option reports only those entries which do not have overlap with the bed file
-# 		bedtools intersect -v -abam $bowtie2_BAM_prefix'.bam' -b $BlackListFile > $bowtie2_BAM_prefix'_remove_blacklist.bam'
-# 		# store the old copy, and also create samtools index
-# 		mv $bowtie2_BAM_prefix'.bam' $bowtie2_BAM_prefix'_possible_overlap_blacklist.bam'
-# 		samtools index $bowtie2_BAM_prefix'_possible_overlap_blacklist.bam'
-# 		# rename the new copy (without blacklisted regions) as the copy to be processed further
-# 		mv $bowtie2_BAM_prefix'_remove_blacklist.bam' $bowtie2_BAM_prefix'.bam'
-# 	fi
-# 	# get the number of reads after removing blacklisted region
-# 	numReadBlackList=`samtools view $bowtie2_BAM_prefix'.bam' | cut -f 1 | sort | uniq | wc -l`
-# else
-# 	numReadBlackList=$nread_qual
-# fi
 
 #============================
 # use deeptools command to create a de-duplicated BAM file 
@@ -775,7 +708,7 @@ if [[ ! -f $ShiftedBAMFile || $Overwrite == 1 ]]; then
 	fi
 	# sort the file
 	samtools sort -o $ShiftedBAMFile $tempfile
-	if [[ ! -f $ShiftedBAMFile'.bai' ]]; then
+	if [[ ! -f $ShiftedBAMFile'.bai' || $Overwrite == 1 ]]; then
 		samtools index $ShiftedBAMFile
 	fi
 	rm $tempfile
@@ -795,19 +728,19 @@ File_1N=$bowtie2_outdir'/mononucleosome.bam'
 File_2N=$bowtie2_outdir'/dinucleosome.bam'
 File_3N=$bowtie2_outdir'/trinucleosome.bam'
 tempfile=$bowtie2_outdir'/temp_nuc.bam'
-if [[ ! -f $File_NFR ]]; then
+if [[ ! -f $File_NFR || $Overwrite == 1 ]]; then
 	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $tempfile --numberOfProcessors $THREADS --minFragmentLength 0 --maxFragmentLength 100
 	samtools sort -o $File_NFR $tempfile
 fi
-if [[ ! -f $File_1N ]]; then
+if [[ ! -f $File_1N || $Overwrite == 1 ]]; then
 	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $tempfile --numberOfProcessors $THREADS --minFragmentLength 180 --maxFragmentLength 247
 	samtools sort -o $File_1N $tempfile
 fi
-if [[ ! -f $File_2N ]]; then
+if [[ ! -f $File_2N || $Overwrite == 1 ]]; then
 	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $tempfile --numberOfProcessors $THREADS --minFragmentLength 315 --maxFragmentLength 473
 	samtools sort -o $File_2N $tempfile
 fi
-if [[ ! -f $File_3N ]]; then
+if [[ ! -f $File_3N || $Overwrite == 1 ]]; then
 	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $tempfile --numberOfProcessors $THREADS --minFragmentLength 558 --maxFragmentLength 615
 	samtools sort -o $File_3N $tempfile
 fi
@@ -818,7 +751,7 @@ fi
 # combine File_1N, File_2N and File_3N
 # to get alignments of one or more nucleosomes (+1N)
 File_Nucleosome_Merge=$bowtie2_outdir'/Merged_nucleosome.bam'
-if [[ ! -f $File_Nucleosome_Merge ]]; then
+if [[ ! -f $File_Nucleosome_Merge || $Overwrite == 1 ]]; then
 	samtools merge $File_Nucleosome_Merge $File_NFR $File_1N $File_2N $File_3N 
 	samtools index $File_Nucleosome_Merge
 fi
@@ -831,26 +764,12 @@ fi
 # http://seqanswers.com/forums/archive/index.php/t-59219.html
 # https://github.com/kundajelab/atac_dnase_pipelines
 #============================
-# # amount of shift done in forward and reverse strand
-# # for producing the TN5 shift
-# # this is with respect to the original paper 
-# # This tagalign file is later used for MACS2 peak calling
-# fwdshft=4
-# revshft=5
 
 # Shifted_TagAlign_File=$bowtie2_BAM_prefix'.TN5.tagAlign.gz'
 Shifted_TagAlign_File=$bowtie2_BAM_prefix'_TN5_Shift.bed'
 
 if [[ ! -f $Shifted_TagAlign_File || $Overwrite == 1 ]]; then
 
-	# old command - sourya
-	# call the utility function to shift the bam file
-	# with respect to forward and reverse strands
-	# Note: the input files (which can be multiple in the target function)
-	# are placed at the last part of a command	
-	# $TagAlignExec -N 0 -f $fwdshft -r $revshft -O $Shifted_TagAlign_File -q $MAPQ_THR -I $bowtie2_BAM_prefix'.rmdup.bam'
-
-	# new command - sourya
 	# just convert the shifted BAM file in BEDPE format - use deeptools command
 	# compatible for MACS2
 	$DeepToolsDir'/alignmentSieve' --bam $ShiftedBAMFile --outFile $Shifted_TagAlign_File --BED --numberOfProcessors $THREADS
@@ -1009,8 +928,6 @@ for MACS2COMMANDTYPE in 'Default' 'ExtSize'; do
 		CURR_MACS2_OUTDIR=$OutDir'/MACS2_Default_Tag'
 	elif [[ $MACS2COMMANDTYPE == 'ExtSize' ]]; then
 		CURR_MACS2_OUTDIR=$OutDir'/MACS2_Ext_Tag'
-	# else
-	# 	CURR_MACS2_OUTDIR=$OutDir'/MACS2_NoDupRem_Align_Ext_Tag'
 	fi
 	if [[ $nctrl -gt 0 ]]; then
 		CURR_MACS2_OUTDIR=$CURR_MACS2_OUTDIR'_with_Control/'
@@ -1021,10 +938,6 @@ for MACS2COMMANDTYPE in 'Default' 'ExtSize'; do
 
 	# now classify according to the peak type : narrow peak or broad peak
 	for PEAKTYPE in 'narrow' 'broad'; do
-
-		# if [[ $MACS2COMMANDTYPE == 'noDupRem' && $PEAKTYPE == 'broad' ]]; then
-		# 	continue
-		# fi
 
 		# current MACS2 output peak file
 		if [[ $PEAKTYPE == 'narrow' ]]; then
@@ -1094,17 +1007,6 @@ for MACS2COMMANDTYPE in 'Default' 'ExtSize'; do
 				fi
 				# execute the command
 				eval $MACS2_cmd	
-
-			# elif [[ $MACS2COMMANDTYPE == 'noDupRem' && $PEAKTYPE == 'narrow' ]]; then
-			# 	# main MACS2 command
-			# 	MACS2_cmd="macs2 callpeak -t "$bowtie2_BAM_prefix".bam -f BAM -g "$PEAKCALLGENOMESIZE" -n "$PREFIX".macs2 -q "$MACS2_Q_Val" --nomodel --nolambda --shift -100 --extsize 200 --keep-dup all --call-summits --outdir "$CURR_MACS2_OUTDIR
-			# 	# if [[ $nctrl -gt 0 ]]; then
-			# 	# 	# include the control bed file also
-			# 	# 	MACS2_cmd=$MACS2_cmd' -c '$Control_TagAlign_File_IDR
-			# 	# fi
-			# 	# execute the command
-			# 	$MACS2_cmd
-
 			fi
 
 		fi 	# end check MACS2 peak file existence
@@ -1223,20 +1125,11 @@ for MACS2COMMANDTYPE in 'Default' 'ExtSize'; do
 		FRiP_outfile=$CURR_MACS2_OUTDIR'out_FRiP.txt'
 
 		if [[ ! -f $FRiP_outfile || $Overwrite == 1 ]]; then
-			# number of reads within MACS2 narrow peaks (q threshold = 0.05)
-			
-			# old code - comment - sourya
-			# -c (count option) returns incorrect numbers for paired end reads
-			# macs2_nreads_narrowpeak=`samtools view -cL $CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt' $bowtie2_BAM_prefix'.rmdup.bam'`
-			# new code - dump filtered reads first and then count the number of reads
+			# number of reads within MACS2 narrow peaks (q threshold = 0.05)			
 			macs2_nreads_narrowpeak=`samtools view -L $CURR_MACS2_OUTDIR$PREFIX'.macs2_peaks.narrowPeak_Q0.05filt' $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`
 			FRiP_narrowpeak=`bc <<< "scale=3; ($macs2_nreads_narrowpeak * 1.0) / $uniq_mapped_read"`
 
 			# number of reads within MACS2 broad peaks (q threshold = 0.05)
-			# old code - comment - sourya
-			# -c (count option) returns incorrect numbers for paired end reads
-			# macs2_nreads_broadpeak=`samtools view -cL $CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt' $bowtie2_BAM_prefix'.rmdup.bam'`
-			# new code - dump filtered reads first and then count the number of reads
 			macs2_nreads_broadpeak=`samtools view -L $CURR_MACS2_OUTDIR$PREFIX'.macs2_Broad_peaks.broadPeak_Q0.05filt' $bowtie2_BAM_prefix'.rmdup.bam' | cut -f 1 | sort | uniq | wc -l`		
 			FRiP_broadpeak=`bc <<< "scale=3; ($macs2_nreads_broadpeak * 1.0) / $uniq_mapped_read"`
 
@@ -1308,7 +1201,8 @@ done
 #================================
 # analyzing TF footprints
 #================================
-# for FDRpct in 5 1; do
+
+##========== peaks with respect to FDR threshold: 5 means 0.05 FDR, 1 means 0.01 FDR
 for FDRpct in 5; do
 	if [[ $nctrl -gt 0 ]]; then	
 		inpPeakFile=$OutDir'/MACS2_Ext_Tag_with_Control/'$PREFIX'.macs2_peaks.narrowPeak_Q0.0'$FDRpct'filt'
@@ -1318,18 +1212,28 @@ for FDRpct in 5; do
 		MotifOutDir=$OutDir'/Motif_MACS2_Ext_Tag_No_Control_narrowPeak_Q0.0'$FDRpct'filt'
 	fi
 
+	##========== summit from the ATAC-seq peaks
 	#for summitoffsetval in 500 200; do
 	for summitoffsetval in 200; do
 		
-		motifPeakFile=$MotifOutDir'/Motif_Complete_Peaks_SummitOffset_'$summitoffsetval'/Peaks_Summit_Offset_'$summitoffsetval'bp.bed'
+		##================
+		## analyzing all the peaks
+		## currently commented
+		##================
+		if [[ 1 == 0 ]]; then
+			motifPeakFile=$MotifOutDir'/Motif_Complete_Peaks_SummitOffset_'$summitoffsetval'/Peaks_Summit_Offset_'$summitoffsetval'bp.bed'
 
-		# analyzing complete set of peaks, and extracting summits
-		$RPackageExec ../Imp_Scripts/Motif_HOMER.R --MotifFindExec $HOMERMotifExec --RefGenome $RefGenome --PeakFile $inpPeakFile --OutDir $MotifOutDir --SummitOffset $summitoffsetval	
+			# analyzing complete set of peaks, and extracting summits
+			$RPackageExec ../Imp_Scripts/Motif_HOMER.R --MotifFindExec $HOMERMotifExec --RefGenome $RefGenome --PeakFile $inpPeakFile --OutDir $MotifOutDir --SummitOffset $summitoffsetval	
 		
-		# call HINT-ATAC specific motif footprinting
-		$RPackageExec ../Imp_Scripts/Footprint_HINT_ATAC.R --MotifPeak $motifPeakFile --AllRead $ShiftedBAMFile --NFRRead $File_NFR --NFRANDNuclRead $File_Nucleosome_Merge --OutDir $MotifOutDir'/Motif_Complete_Peaks_SummitOffset_'$summitoffsetval'/Footprint_HINT_ATAC' --RefGenome $RefGenome --PE $paired_read				
+			# call HINT-ATAC specific motif footprinting
+			$RPackageExec ../Imp_Scripts/Footprint_HINT_ATAC.R --MotifPeak $motifPeakFile --AllRead $ShiftedBAMFile --NFRRead $File_NFR --NFRANDNuclRead $File_Nucleosome_Merge --OutDir $MotifOutDir'/Motif_Complete_Peaks_SummitOffset_'$summitoffsetval'/Footprint_HINT_ATAC' --RefGenome $RefGenome --PE $paired_read --FP $FootprintOption			
+
+		fi 	# end dummy if
 		
+		##================
 		# motif finding by filtering peaks such that -log10(p-value) > 50
+		##================
 		pvalThr=50
 		
 		motifPeakFile=$MotifOutDir'/Motif_Peaks_PvalThr_'$pvalThr'_SummitOffset_'$summitoffsetval'/Filtered_Peaks_PvalThr_Summit_Offset_'$summitoffsetval'bp.bed'
@@ -1337,7 +1241,7 @@ for FDRpct in 5; do
 		$RPackageExec ../Imp_Scripts/Motif_HOMER.R --MotifFindExec $HOMERMotifExec --RefGenome $RefGenome --PeakFile $inpPeakFile --OutDir $MotifOutDir --PValThr $pvalThr --SummitOffset $summitoffsetval
 
 		# call HINT-ATAC specific motif footprinting
-		$RPackageExec ../Imp_Scripts/Footprint_HINT_ATAC.R --MotifPeak $motifPeakFile --AllRead $ShiftedBAMFile --NFRRead $File_NFR --NFRANDNuclRead $File_Nucleosome_Merge --OutDir $MotifOutDir'/Motif_Peaks_PvalThr_'$pvalThr'_SummitOffset_'$summitoffsetval'/Footprint_HINT_ATAC' --RefGenome $RefGenome --PE $paired_read
+		$RPackageExec ../Imp_Scripts/Footprint_HINT_ATAC.R --MotifPeak $motifPeakFile --AllRead $ShiftedBAMFile --NFRRead $File_NFR --NFRANDNuclRead $File_Nucleosome_Merge --OutDir $MotifOutDir'/Motif_Peaks_PvalThr_'$pvalThr'_SummitOffset_'$summitoffsetval'/Footprint_HINT_ATAC' --RefGenome $RefGenome --PE $paired_read --FP $FootprintOption
 
 	done
 done
@@ -1371,47 +1275,6 @@ for offsetval in 5000 1000; do
 	done
 done
 
-
-
-
-
-
-
-# # #================================
-# # # here analyze the MACS2 output 
-# # # from the default command
-# # # and the extsize command
-# # # compute peak overlap statistics
-# # #================================
-
-# # PeakOverlapOutDir=$OutDir'/Peak_Overlap_Statistics'
-# # mkdir -p $PeakOverlapOutDir
-
-# # if [ ! -f $PeakOverlapOutDir'/Peak_Overlap.txt' ]; then
-# # 	/home/sourya/R-3.4.3/bin/Rscript $PeakOverlapCode --FileList $MACS2_outdir_default$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt':$MACS2_outdir_ext$PREFIX'.macs2_peaks.narrowPeak_Q0.01filt' --Labels 'MACS2_Default':'MACS2_Ext' --OutPrefix $PeakOverlapOutDir'/Peak_Ov' --Dump
-# # fi
-
-# # #=============================
-# # # now we check for individual peaks (detected from MACS2)
-# # # the number of reads mapped into this peak
-# # # also we measure the peak length
-# # #=============================
-# # python ../src/peak_distribution.py -I $MACS2_outdir2 $PREFIX'.macs2_peaks.broadPeak' -R $bowtie2_BAM_prefix'.rmdup.MAPQ'$MAPQ_THR'.bam'
-# # python ../src/peak_distribution.py -I $MACS2_outdir1 $PREFIX'.macs2_peaks.narrowPeak' -R $bowtie2_BAM_prefix'.rmdup.MAPQ'$MAPQ_THR'.bam'
-
-# #==============
-# # remove temporary files
-# if [[ -f $curr_tagalign_file ]]; then
-# 	rm $curr_tagalign_file
-# fi
-
-# if [[ -f $temp_NRF_PBC_file ]]; then
-# 	rm $temp_NRF_PBC_file
-# fi
-
-# if [[ -f $Shifted_TagAlign_File ]]; then
-# 	rm $Shifted_TagAlign_File
-# fi
 
 #----------------------------------
 # important - sourya
